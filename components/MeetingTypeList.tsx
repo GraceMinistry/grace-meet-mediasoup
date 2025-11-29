@@ -9,9 +9,12 @@ import MeetingModal from "./MeetingModal";
 import { Call, useStreamVideoClient } from "@stream-io/video-react-sdk";
 import { useUser } from "@clerk/nextjs";
 import Loader from "./Loader";
+// import DateTimePicker from "./DateTimePicker";
 
 import { Textarea } from "./ui/textarea";
 import ReactDatePicker from "react-datepicker";
+import "@stream-io/video-react-sdk/dist/css/styles.css";
+import "react-datepicker/dist/react-datepicker.css"
 import { toast } from "sonner";
 import { Input } from "./ui/input";
 
@@ -68,9 +71,7 @@ const MeetingTypeList = () => {
     }
   };
 
-//   if (!client || !user) return <Loader />;
-
-
+  if (!client || !user) return <Loader />;
 
   const meetingLink = `${process.env.NEXT_PUBLIC_BASE_URL}/meeting/${callDetail?.id}`;
 
@@ -108,7 +109,7 @@ const MeetingTypeList = () => {
         handleClick={() => router.push("/recordings")}
       />
 
-      
+      {!callDetail ? (
         <MeetingModal
           isOpen={meetingState === "isScheduleMeeting"}
           onClose={() => setMeetingState(undefined)}
@@ -116,23 +117,24 @@ const MeetingTypeList = () => {
           handleClick={createMeeting}
         >
           <div className="flex flex-col gap-2.5">
-            <label className="text-base font-normal text-sky-2">
+            <label className="text-base font-normal leading-[22.4px] text-sky-2">
               Add a description
             </label>
-
             <Textarea
-              className="border-none bg-dark-3"
+              className="border-none bg-dark-3 focus-visible:ring-0 focus-visible:ring-offset-0"
               onChange={(e) =>
                 setValues({ ...values, description: e.target.value })
               }
             />
           </div>
-
           <div className="flex w-full flex-col gap-2.5">
-            <label className="text-base font-normal text-sky-2">
+            <label className="text-base font-normal leading-[22.4px] text-sky-2">
               Select Date and Time
             </label>
-
+           {/* <DateTimePicker
+              value={values.dateTime}
+              onChange={(date) => setValues({ ...values, dateTime: date })}
+            />*/}
             <ReactDatePicker
               selected={values.dateTime}
               onChange={(date) => setValues({ ...values, dateTime: date! })}
@@ -141,27 +143,26 @@ const MeetingTypeList = () => {
               timeIntervals={15}
               timeCaption="time"
               dateFormat="MMMM d, yyyy h:mm aa"
-              className="w-full rounded bg-dark-3 p-2"
+              className="w-full rounded bg-dark-3 p-2 focus:outline-none"
             />
           </div>
         </MeetingModal>
-      
+      ) : (
         <MeetingModal
           isOpen={meetingState === "isScheduleMeeting"}
           onClose={() => setMeetingState(undefined)}
           title="Meeting Created"
-          buttonText="Copy Meeting Link"
-          buttonIcon="/icons/copy.svg"
-          className="text-center"
           handleClick={() => {
             navigator.clipboard.writeText(meetingLink);
-            toast("Link copied");
+            toast("Link Copied" );
           }}
-          image="/icons/checked.svg"
+          image={"/icons/check-100-red2.png"}
+          buttonIcon="/icons/copy.svg"
+          className="text-center"
+          buttonText="Copy Meeting Link"
         />
-      
+      )}
 
-      {/* JOIN MEETING MODAL */}
       <MeetingModal
         isOpen={meetingState === "isJoiningMeeting"}
         onClose={() => setMeetingState(undefined)}
@@ -173,11 +174,10 @@ const MeetingTypeList = () => {
         <Input
           placeholder="Meeting link"
           onChange={(e) => setValues({ ...values, link: e.target.value })}
-          className="border-none bg-dark-3"
+          className="border-none bg-dark-3 focus-visible:ring-0 focus-visible:ring-offset-0"
         />
       </MeetingModal>
 
-      {/* INSTANT MEETING MODAL */}
       <MeetingModal
         isOpen={meetingState === "isInstantMeeting"}
         onClose={() => setMeetingState(undefined)}

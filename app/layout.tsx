@@ -4,6 +4,7 @@ import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "@/components/ui/sonner";
 import "@stream-io/video-react-sdk/dist/css/styles.css";
+import { enUS } from "@clerk/localizations";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -11,8 +12,8 @@ export const metadata: Metadata = {
   title: "Grace Meet",
   description: "Video Calling App",
   icons: {
-    icon: '/icons/white-logo.png'
-  }
+    icon: "/icons/white-logo.png",
+  },
 };
 
 export default function RootLayout({
@@ -37,13 +38,18 @@ export default function RootLayout({
           },
         }}
         localization={{
+          ...enUS,
           signIn: {
+            ...enUS.signIn,
             start: {
+              ...enUS.signIn.start,
               title: "Grace Meet",
             },
           },
           signUp: {
+            ...enUS.signUp,
             start: {
+              ...enUS.signUp.start,
               title: "Grace Meet",
             },
           },
