@@ -4,7 +4,6 @@ import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "@/components/ui/sonner";
 
-
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -23,7 +22,7 @@ export default function RootLayout({
         appearance={{
           layout: {
             socialButtonsVariant: "iconButton",
-            logoImageUrl: "/icons/white-logo.png",
+            logoImageUrl: "/icons/Gm-White-logo.png",
           },
           variables: {
             colorText: "#fff",
@@ -33,9 +32,22 @@ export default function RootLayout({
             colorInputText: "#fff",
           },
         }}
+        localization={{
+          signIn: {
+            start: {
+              title: "Grace Meet",
+            },
+          },
+          signUp: {
+            start: {
+              title: "Grace Meet",
+            },
+          },
+        }}
       >
-        <body className={`${inter.className} bg-dark-2`}>{children}
-        <Toaster />
+        <body className={`${inter.className} bg-dark-2`}>
+          {children}
+          <Toaster />
         </body>
       </ClerkProvider>
     </html>

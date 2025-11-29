@@ -10,8 +10,12 @@
   color: white;
 }
 
-.cl-logoBox {
+/* .cl-logoBox {
   height: 40px;
+} */
+.cl-logoImage {
+  width: 150px !important;
+  height: auto !important;
 }
 .cl-dividerLine {
   background: #252a41;
@@ -27,6 +31,9 @@
 }
 .cl-userButtonPopoverActionButton {
   color: white;
+}
+.cl-socialButtonsBlockButtonText__google {
+  color: white !important;
 }
 
 
