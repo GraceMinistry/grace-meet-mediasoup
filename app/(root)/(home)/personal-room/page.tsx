@@ -31,9 +31,9 @@ const PersonalRoom = () => {
   const router = useRouter();
   const { user } = useUser();
   const client = useStreamVideoClient();
- 
 
   const meetingId = user?.id;
+  const userRole = "admin";
 
   const { call } = useGetCallById(meetingId!);
 
@@ -42,11 +42,18 @@ const PersonalRoom = () => {
 
     const newCall = client.call("default", meetingId!);
 
+    // Use getOrCreate which handles both creation and retrieval
+    await newCall.getOrCreate({
+      data: {
+        starts_at: new Date().toISOString(),
+        members: [{ user_id: user.id, role: userRole }],
+      },
+    });
+
+    // If call already exists, update the member role to ensure admin status
     if (!call) {
-      await newCall.getOrCreate({
-        data: {
-          starts_at: new Date().toISOString(),
-        },
+      await newCall.updateCallMembers({
+        update_members: [{ user_id: user.id, role: userRole }],
       });
     }
 
