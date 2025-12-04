@@ -56,7 +56,7 @@ const GridLayout = () => {
       ];
     }
     return participants;
-  }, [participants, activeSpeaker, isScreenSharing]);
+  }, [participants, activeSpeaker, isScreenSharing]);  
 
   const isScreenMode = isScreenSharing && screenSharer;
   const isMobile = screenWidth < 1024;
