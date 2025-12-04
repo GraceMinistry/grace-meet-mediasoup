@@ -35,7 +35,7 @@ const MeetingRoom = () => {
   useEffect(() => {
     if (!call) return;
 
-    const handleMemberUpdate = (event: StreamVideoEvent) => {
+    const handleMemberUpdate = (event: StreamVideoEvent) => {  
       console.log('Member updated event:', event);
       
       // Type guard: check if event has user property before accessing it
