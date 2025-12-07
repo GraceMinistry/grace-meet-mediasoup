@@ -1,6 +1,5 @@
 // app/root/meeting/[id]/layout.tsx
 import type { Metadata } from "next";
-import MeetingRoomWrapper from "@/components/MeetingRoomWrapper";
 import React, { ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -15,10 +14,8 @@ export const metadata: Metadata = {
 const MeetingLayout = ({ children }: { children: ReactNode }) => {
   return (
     <main>
-      <MeetingRoomWrapper>
-        {children}
-        <Toaster />
-      </MeetingRoomWrapper>
+      {children}
+      <Toaster />
     </main>
   );
 };

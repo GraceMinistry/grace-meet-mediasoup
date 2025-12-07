@@ -4,9 +4,9 @@ import {
     useCallStateHooks,
     hasScreenShare
 } from "@stream-io/video-react-sdk";
+import { useVideoElements } from "@/contexts/VideoElementContext";
 
 export const useAutoPictureInPicture = () => {
-    // --- Stream Hooks ---
     const { 
         useDominantSpeaker, 
         useHasOngoingScreenShare,
@@ -16,70 +16,92 @@ export const useAutoPictureInPicture = () => {
     const participants = useParticipants();
     const dominantSpeaker = useDominantSpeaker();
     const hasOngoingScreenShare = useHasOngoingScreenShare();
+    const { getVideo } = useVideoElements();
 
-    // --- State ---
     const [isPiPActive, setIsPiPActive] = useState(false);
+    const [pipWindow, setPipWindow] = useState<Window | null>(null);
 
-    // Find screen sharer
     const screenSharer = useMemo(
         () => participants.find((p) => hasScreenShare(p)),
         [participants]
     );
 
-    // --- Helper to find the correct video element based on Priority ---
-    const getTargetVideo = useCallback((): HTMLVideoElement | null => {
-        let targetSessionId: string | undefined;
-
-        // 1. SCREEN SHARE (Highest Priority)
+    // Priority logic for selecting participant
+    const getTargetParticipant = useCallback(() => {
+        // Priority 1: Screen sharer
         if (hasOngoingScreenShare && screenSharer) {
-            targetSessionId = screenSharer.sessionId; 
-        } 
-        // 2. DOMINANT SPEAKER
-        else if (dominantSpeaker) {
-            targetSessionId = dominantSpeaker.sessionId;
-        } 
-        // 3. FIRST NON-LOCAL PARTICIPANT (Fallback)
-        else {
-            const nonLocalParticipant = participants.find(p => !p.isLocalParticipant);
-            if (nonLocalParticipant) {
-                targetSessionId = nonLocalParticipant.sessionId;
+            return screenSharer;
+        }
+        // Priority 2: Dominant speaker
+        if (dominantSpeaker) {
+            return dominantSpeaker;
+        }
+        // Priority 3: First remote participant
+        return participants.find(p => !p.isLocalParticipant) || null;
+    }, [dominantSpeaker, hasOngoingScreenShare, screenSharer, participants]);
+
+    const currentTargetParticipant = useMemo(() => getTargetParticipant(), [getTargetParticipant]);
+
+    // Document PiP toggle
+    const toggleDocumentPiP = useCallback(async () => {
+        if (!("documentPictureInPicture" in window)) {
+            console.warn("Document PiP not supported");
+            return;
+        }
+
+        if (pipWindow) {
+            pipWindow.close();
+            setPipWindow(null);
+        } else {
+            try {
+                const pw = await (window as any).documentPictureInPicture.requestWindow({
+                    width: 400,
+                    height: 300
+                });
+
+                // Copy stylesheets to PiP window
+                window.document.head
+                    .querySelectorAll('link[rel="stylesheet"], style')
+                    .forEach((node) => {
+                        pw.document.head.appendChild(node.cloneNode(true));
+                    });
+
+                // Handle window close
+                pw.addEventListener("pagehide", () => {
+                    setPipWindow(null);
+                    setIsPiPActive(false);
+                });
+
+                setPipWindow(pw);
+                setIsPiPActive(true);
+            } catch (error) {
+                console.error("Document PiP failed:", error);
             }
         }
+    }, [pipWindow]);
 
-        if (!targetSessionId) {
-            // Final fallback: any video element
-            return document.querySelector('video') || null;
-        }
-
-        // Search for the video element corresponding to the targetSessionId
-        // Note: You'll need to add data-session-id to your ParticipantView wrapper
-        const selector = `video[data-session-id="${targetSessionId}"]`;
-        const targetVideoElement = document.querySelector<HTMLVideoElement>(selector);
-
-        if (targetVideoElement) {
-            return targetVideoElement;
-        }
-        
-        // Final fallback
-        return document.querySelector('video') || null;
-        
-    }, [dominantSpeaker, hasOngoingScreenShare, screenSharer, participants]);
-    
-    // Memoize the target video element
-    const currentTargetVideo = useMemo(() => getTargetVideo(), [getTargetVideo]);
-
-    // --- PiP Control Functions ---
-    const togglePiP = async () => {
+    // Video PiP toggle (fallback)
+    const toggleVideoPiP = useCallback(async () => {
         if (document.pictureInPictureElement) {
             await document.exitPictureInPicture().catch(console.error);
-        } else if (currentTargetVideo && document.pictureInPictureEnabled) {
-            await currentTargetVideo.requestPictureInPicture().catch(error => {
-                console.error("Manual PiP failed:", error);
-            });
+        } else {
+            const targetVideo = currentTargetParticipant ? getVideo(currentTargetParticipant.sessionId) : null;
+            if (targetVideo && document.pictureInPictureEnabled) {
+                await targetVideo.requestPictureInPicture().catch(console.error);
+            }
         }
-    };
+    }, [currentTargetParticipant, getVideo]);
 
-    // --- EFFECT: Handle Events and Auto-Exit ---
+    // Unified toggle - prefer Document PiP
+    const togglePiP = useCallback(async () => {
+        if ("documentPictureInPicture" in window) {
+            await toggleDocumentPiP();
+        } else {
+            await toggleVideoPiP();
+        }
+    }, [toggleDocumentPiP, toggleVideoPiP]);
+
+    // Track Video PiP state
     useEffect(() => {
         const handlePiPEvent = () => {
             setIsPiPActive(!!document.pictureInPictureElement);
@@ -87,42 +109,21 @@ export const useAutoPictureInPicture = () => {
 
         document.addEventListener("enterpictureinpicture", handlePiPEvent);
         document.addEventListener("leavepictureinpicture", handlePiPEvent);
-        
-        // Auto-exit when returning to page
-        const handleVisibilityChange = async () => {
-            if (!document.hidden && document.pictureInPictureElement) {
-                await document.exitPictureInPicture().catch(console.error);
-            }
-        };
-
-        document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
             document.removeEventListener("enterpictureinpicture", handlePiPEvent);
             document.removeEventListener("leavepictureinpicture", handlePiPEvent);
         };
     }, []);
-    
-    // --- EFFECT: Switch PiP Target when speaker/sharer changes ---
-    useEffect(() => {
-        if (!isPiPActive) return;
 
-        const currentPiPVideo = document.pictureInPictureElement;
-
-        if (currentTargetVideo && currentPiPVideo !== currentTargetVideo) {
-            console.log("Switching PiP target due to speaker/sharer change.");
-            
-            document.exitPictureInPicture()
-                .then(() => currentTargetVideo.requestPictureInPicture())
-                .catch(console.error);
-        }
-    }, [currentTargetVideo, isPiPActive]);
+    const isPiPSupported = "documentPictureInPicture" in window || document.pictureInPictureEnabled;
 
     return { 
         togglePiP, 
         isPiPActive, 
-        isPiPSupported: document.pictureInPictureEnabled, 
-        currentTargetVideo
+        isPiPSupported,
+        pipWindow,
+        currentTargetParticipant,
+        isDocumentPiP: !!pipWindow
     };
 };

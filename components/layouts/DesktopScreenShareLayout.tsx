@@ -2,6 +2,7 @@ import {
   ParticipantView,
   StreamVideoParticipant,
 } from "@stream-io/video-react-sdk";
+import VideoRegistrar from "../VideoRegistrar";
 // import CustomParticipantViewUI from "../CustomParticipantViewUI";
 
 interface DesktopScreenShareLayoutProps {
@@ -32,6 +33,7 @@ const DesktopScreenShareLayout = ({
             participant={screenSharer}
             trackType="screenShareTrack"
             className="!w-full !h-full object-cover"
+            ParticipantViewUI={VideoRegistrar}
             // ParticipantViewUI={CustomParticipantViewUI}
           />
         </div>
@@ -55,6 +57,7 @@ const DesktopScreenShareLayout = ({
                 participant={p}
                 trackType="videoTrack"
                 className="!w-full !h-full object-cover"
+                ParticipantViewUI={VideoRegistrar}
                 // ParticipantViewUI={CustomParticipantViewUI}
               />
             </div>
