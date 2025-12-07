@@ -4,6 +4,12 @@ import {
   useCallStateHooks,
   hasScreenShare,
   ParticipantView,
+  useCall,
+  combineComparators,
+  dominantSpeaker,
+  speaking,
+  publishingVideo,
+  publishingAudio,
 } from "@stream-io/video-react-sdk";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -14,13 +20,15 @@ import DesktopNormalLayout from "./layouts/DesktopNormalLayout";
 import DesktopScreenShareLayout from "./layouts/DesktopScreenShareLayout";
 import MobileNormalLayout from "./layouts/MobileNormalLayout";
 import MobileScreenShareLayout from "./layouts/MobileScreenShareLayout";
+import { PictureInPicture2, X } from "lucide-react";
 
 const GridLayout = () => {
+  const call = useCall();
   const { useParticipants, useDominantSpeaker, useHasOngoingScreenShare } =
     useCallStateHooks();
 
   const participants = useParticipants();
-  const dominantSpeaker = useDominantSpeaker();
+  const dominantSpeakerParticipant = useDominantSpeaker();
   const isScreenSharing = useHasOngoingScreenShare();
 
   const {
@@ -36,6 +44,20 @@ const GridLayout = () => {
     typeof window !== "undefined" ? window.innerWidth : 1024
   );
 
+  // Apply custom sorting that prioritizes dominant speaker
+  useEffect(() => {
+    if (!call) return;
+
+    const customSorting = combineComparators(
+      dominantSpeaker,
+      speaking,
+      publishingVideo,
+      publishingAudio
+    );
+
+    call.setSortParticipantsBy(customSorting);
+  }, [call]);
+
   useEffect(() => {
     const handleResize = () => setScreenWidth(window.innerWidth);
     window.addEventListener("resize", handleResize);
@@ -47,24 +69,10 @@ const GridLayout = () => {
     [participants]
   );
 
+  // Active speaker is now the first participant (already sorted by Stream)
   const activeSpeaker = useMemo(() => {
-    if (dominantSpeaker) return dominantSpeaker;
-    return (
-      [...participants].sort(
-        (a: any, b: any) => (b.audioLevel ?? 0) - (a.audioLevel ?? 0)
-      )[0] ?? null
-    );
-  }, [participants, dominantSpeaker]);
-
-  const sorted = useMemo(() => {
-    if (!isScreenSharing && activeSpeaker) {
-      return [
-        activeSpeaker,
-        ...participants.filter((p) => p.sessionId !== activeSpeaker.sessionId),
-      ];
-    }
-    return participants;
-  }, [participants, activeSpeaker, isScreenSharing]);
+    return participants[0] || null;
+  }, [participants]);
 
   const isScreenMode = isScreenSharing && screenSharer;
   const isMobile = screenWidth < 1024;
@@ -91,11 +99,9 @@ const GridLayout = () => {
           }
         >
           {isPiPActive ? (
-            // Exit PiP Icon (⬆️ out of box style)
-            <span className="text-white text-lg">⤴️</span>
+            <X className="text-white w-5 h-5" />
           ) : (
-            // Enter PiP Icon (little screen in screen)
-            <span className="text-white text-lg">🗔</span>
+            <PictureInPicture2 className="text-white w-5 h-5" />
           )}
         </button>
       )}
@@ -132,7 +138,7 @@ const GridLayout = () => {
         <>
           {isMobile && !isScreenMode && (
             <MobileNormalLayout
-              sorted={sorted}
+              sorted={participants}
               screenWidth={screenWidth}
               activeSpeaker={activeSpeaker}
             />
@@ -148,7 +154,7 @@ const GridLayout = () => {
 
           {!isMobile && !isScreenMode && (
             <DesktopNormalLayout
-              sorted={sorted}
+              sorted={participants}
               screenWidth={screenWidth}
               activeSpeaker={activeSpeaker}
             />
