@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallStateHooks, hasScreenShare } from "@stream-io/video-react-sdk";
+import { useCallStateHooks, hasScreenShare, ParticipantView } from "@stream-io/video-react-sdk";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useAutoPictureInPicture } from "../hooks/useAutoPictureInPicture";
 
 // COMPONENTS
@@ -18,27 +19,30 @@ const GridLayout = () => {
   const dominantSpeaker = useDominantSpeaker();
   const isScreenSharing = useHasOngoingScreenShare();
 
-  // Auto PiP hook - CORRECTED
-  const { togglePiP, isPiPActive, isPiPSupported } = useAutoPictureInPicture();
+  const { 
+    togglePiP, 
+    isPiPActive, 
+    isPiPSupported, 
+    pipWindow,
+    currentTargetParticipant,
+    isDocumentPiP 
+  } = useAutoPictureInPicture();
 
   const [screenWidth, setScreenWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1024
   );
 
-  // Listen for screen width changes
   useEffect(() => {
     const handleResize = () => setScreenWidth(window.innerWidth);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Find the user who is screen sharing
   const screenSharer = useMemo(
     () => participants.find((p) => hasScreenShare(p)),
     [participants]
   );
 
-  // Active speaker fallback
   const activeSpeaker = useMemo(() => {
     if (dominantSpeaker) return dominantSpeaker;
     return (
@@ -48,7 +52,6 @@ const GridLayout = () => {
     );
   }, [participants, dominantSpeaker]);
 
-  // Sorted for normal mode (active speaker first)
   const sorted = useMemo(() => {
     if (!isScreenSharing && activeSpeaker) {
       return [
@@ -64,55 +67,74 @@ const GridLayout = () => {
 
   return (
     <div className="w-full h-full p-2 overflow-y-auto overscroll-contain">
-      {/* Floating PiP Button */}
+      {/* Unified PiP Toggle Button */}
       {isPiPSupported && (
         <button
           onClick={togglePiP}
           className={`
             fixed top-4 right-4 z-50 
-            ${
-              isPiPActive
-                ? "bg-red-600 hover:bg-red-700"
-                : "bg-blue-600 hover:bg-blue-700"
-            }
-            text-white px-4 py-2 rounded-full shadow-lg transition-all
+            ${isPiPActive ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"}
+            text-white px-4 py-2 rounded-full shadow-lg transition-all font-semibold
           `}
         >
-          {isPiPActive ? "❌ Exit PiP" : "📺 PiP"}
+          {isPiPActive ? "🔴 Exit PiP" : "📺 Minimize"}
         </button>
       )}
-      {/** MOBILE */}
-      {isMobile && !isScreenMode && (
-        <MobileNormalLayout
-          sorted={sorted}
-          screenWidth={screenWidth}
-          activeSpeaker={activeSpeaker}
-        />
+
+      {/* Document PiP Portal */}
+      {pipWindow && currentTargetParticipant && createPortal(
+        <div className="w-full h-full bg-gray-900 flex flex-col">
+          <div className="flex-1 relative">
+            <ParticipantView
+              participant={currentTargetParticipant}
+              trackType={isScreenSharing && screenSharer?.sessionId === currentTargetParticipant.sessionId 
+                ? "screenShareTrack" 
+                : "videoTrack"}
+            />
+          </div>
+          <div className="p-2 bg-gray-800 text-white text-sm text-center">
+            {currentTargetParticipant.name || "Participant"}
+            {isScreenSharing && screenSharer?.sessionId === currentTargetParticipant.sessionId && " (Screen)"}
+          </div>
+        </div>,
+        pipWindow.document.body
       )}
 
-      {isMobile && isScreenMode && (
-        <MobileScreenShareLayout
-          participants={participants}
-          screenSharer={screenSharer}
-          activeSpeaker={activeSpeaker}
-        />
-      )}
+      {/* Main Layout - Hidden when Document PiP is active */}
+      {!isDocumentPiP && (
+        <>
+          {isMobile && !isScreenMode && (
+            <MobileNormalLayout
+              sorted={sorted}
+              screenWidth={screenWidth}
+              activeSpeaker={activeSpeaker}
+            />
+          )}
 
-      {/** DESKTOP */}
-      {!isMobile && !isScreenMode && (
-        <DesktopNormalLayout
-          sorted={sorted}
-          screenWidth={screenWidth}
-          activeSpeaker={activeSpeaker}
-        />
-      )}
+          {isMobile && isScreenMode && (
+            <MobileScreenShareLayout
+              participants={participants}
+              screenSharer={screenSharer}
+              activeSpeaker={activeSpeaker}
+            />
+          )}
 
-      {!isMobile && isScreenMode && (
-        <DesktopScreenShareLayout
-          participants={participants}
-          screenSharer={screenSharer}
-          activeSpeaker={activeSpeaker}
-        />
+          {!isMobile && !isScreenMode && (
+            <DesktopNormalLayout
+              sorted={sorted}
+              screenWidth={screenWidth}
+              activeSpeaker={activeSpeaker}
+            />
+          )}
+
+          {!isMobile && isScreenMode && (
+            <DesktopScreenShareLayout
+              participants={participants}
+              screenSharer={screenSharer}
+              activeSpeaker={activeSpeaker}
+            />
+          )}
+        </>
       )}
     </div>
   );

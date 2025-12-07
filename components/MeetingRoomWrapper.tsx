@@ -3,22 +3,26 @@
 import { useEffect, useRef, useState } from "react";
 import { useCallStateHooks } from "@stream-io/video-react-sdk";
 
-// --- HELPER FUNCTION: WEB NOTIFICATIONS ---
 const notifyUser = () => {
   if ("Notification" in window && Notification.permission === "granted") {
     const notification = new Notification("Meeting Active!", {
       body: "Click to return to your Custom Meet stream.",
       icon: "/icons/Gm-White-logo.png",
       tag: "meet-return-notification",
-    }); // Auto-focus the tab when the user clicks the notification (works reliably on desktop)
+    });
     notification.onclick = function () {
       window.focus();
     };
   }
 };
-// ------------------------------------------
 
-const MeetingRoomWrapper = ({ children }: { children: React.ReactNode }) => {
+const MeetingRoomWrapper = ({ 
+  children,
+  call
+}: { 
+  children: React.ReactNode;
+  call: any;
+}) => {
   const wakeLockRef = useRef<any>(null);
   const miniRef = useRef<HTMLDivElement>(null);
 
@@ -27,7 +31,7 @@ const MeetingRoomWrapper = ({ children }: { children: React.ReactNode }) => {
   const [isDragging, setIsDragging] = useState(false);
 
   const { useDominantSpeaker } = useCallStateHooks();
-  const dominantSpeaker = useDominantSpeaker(); // WakeLock
+  const dominantSpeaker = useDominantSpeaker();
 
   const requestWakeLock = async () => {
     try {
@@ -43,10 +47,9 @@ const MeetingRoomWrapper = ({ children }: { children: React.ReactNode }) => {
     } catch (e) {
       console.error("Wake Lock failed to acquire:", e);
     }
-  }; // Improved Background Audio with Media Session Actions
+  };
 
   const enableBackgroundAudio = () => {
-    // 1. Setup Media Session for proper system controls and longevity
     if ("mediaSession" in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: "Active Meeting",
@@ -54,7 +57,6 @@ const MeetingRoomWrapper = ({ children }: { children: React.ReactNode }) => {
       });
       navigator.mediaSession.playbackState = "playing";
 
-      // Add action handlers
       navigator.mediaSession.setActionHandler("play", () => {
         const audio = document.getElementById(
           "background-audio-trick"
@@ -69,7 +71,8 @@ const MeetingRoomWrapper = ({ children }: { children: React.ReactNode }) => {
         audio?.pause();
         navigator.mediaSession.playbackState = "paused";
       });
-    } // 2. Fallback: Use silent audio track
+    }
+
     let audio = document.getElementById(
       "background-audio-trick"
     ) as HTMLAudioElement;
@@ -88,32 +91,28 @@ const MeetingRoomWrapper = ({ children }: { children: React.ReactNode }) => {
         error
       );
     });
-  }; // --- Core Effects (Mount & Cleanup) ---
+  };
 
   useEffect(() => {
-    // A. Request Notification permission early
     if ("Notification" in window && Notification.permission !== "granted") {
       Notification.requestPermission();
-    } // B. Activate Screen Wake Lock and Background Audio on mount
+    }
 
     requestWakeLock();
-    enableBackgroundAudio(); // C. Visibility Change Handler (The core logic)
+    enableBackgroundAudio();
 
     const handleVis = () => {
       const isHidden = document.hidden;
       setShowOverlay(isHidden);
 
       if (isHidden) {
-        // 1. Notify the user via OS notification (The true "pop-up")
         notifyUser();
-        // Add PiP logic here if you want a visual element over other apps
       } else {
-        // 2. Re-acquire WakeLock when returning to the tab
         requestWakeLock();
       }
     };
 
-    document.addEventListener("visibilitychange", handleVis); // D. Cleanup function runs on unmount
+    document.addEventListener("visibilitychange", handleVis);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVis);
@@ -122,7 +121,7 @@ const MeetingRoomWrapper = ({ children }: { children: React.ReactNode }) => {
         navigator.mediaSession.playbackState = "paused";
       }
     };
-  }, []); // Dragging logic (No changes needed, but added centering fix from previous suggestion)
+  }, []);
 
   const onDragStart = () => setIsDragging(true);
   const onDragEnd = () => setIsDragging(false);
@@ -140,23 +139,21 @@ const MeetingRoomWrapper = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <div onMouseMove={onDrag} className="w-full h-full relative">
-            {/* FULL MEETING UI */}      {children}     {" "}
-      {/* FLOATING MINI OVERLAY (Will only appear if the browser window is visible) */}
-           {" "}
+      {children}
+
       {showOverlay && (
         <div
           ref={miniRef}
           onMouseDown={onDragStart}
           onMouseUp={onDragEnd}
           onClick={() => {
-            // This ensures clicking the in-browser overlay brings the tab into focus
             if (!isDragging) window.focus();
           }}
           className={`
-            fixed z-[99999] cursor-pointer rounded-full 
-            shadow-lg overflow-hidden transition-all duration-300
-            ${dominantSpeaker ? "ring-4 ring-blue-400" : ""}
-          `}
+            fixed z-[99999] cursor-pointer rounded-full 
+            shadow-lg overflow-hidden transition-all duration-300
+            ${dominantSpeaker ? "ring-4 ring-blue-400" : ""}
+          `}
           style={{
             width: 65,
             height: 65,
@@ -164,14 +161,11 @@ const MeetingRoomWrapper = ({ children }: { children: React.ReactNode }) => {
             top: drag.y,
           }}
         >
-                   {" "}
           <div className="w-full h-full bg-black/60 flex items-center justify-center text-white text-sm">
-                        Live          {" "}
+            Live
           </div>
-                 {" "}
         </div>
       )}
-         {" "}
     </div>
   );
 };

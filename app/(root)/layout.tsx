@@ -4,6 +4,7 @@ import StreamVideoProvider from "@/providers/StreamClientProvider";
 import React, { ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 
+
 export const metadata: Metadata = {
   title: "Grace Meet",
   description: "Video Calling App",

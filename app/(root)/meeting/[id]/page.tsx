@@ -10,6 +10,8 @@ import { useGetCallById } from '@/hooks/useGetCallById';
 import Alert from '@/components/Alert';
 import MeetingSetup from '@/components/MeetingSetup';
 import MeetingRoom from '@/components/MeetingRoom';
+import { VideoElementProvider } from '@/contexts/VideoElementContext';
+import MeetingRoomWrapper from '@/components/MeetingRoomWrapper';
 
 const MeetingPage = () => {
   const { id: rawId } = useParams();
@@ -26,7 +28,6 @@ const MeetingPage = () => {
     </p>
   );
 
-  // get more info about custom call type:  https://getstream.io/video/docs/react/guides/configuring-call-types/
   const notAllowed = call.type === 'invited' && (!user || !call.state.members.find((m) => m.user.id === user.id));
 
   if (notAllowed) return <Alert title="You are not allowed to join this meeting" />;
@@ -34,14 +35,17 @@ const MeetingPage = () => {
   return (
     <main className="h-screen w-full">
       <StreamCall call={call}>
-        <StreamTheme>
-
-        {!isSetupComplete ? (
-          <MeetingSetup setIsSetupComplete={setIsSetupComplete} />
-        ) : (
-          <MeetingRoom />
-        )}
-        </StreamTheme>
+        <VideoElementProvider>
+          <StreamTheme>
+            <MeetingRoomWrapper call={call}>
+              {!isSetupComplete ? (
+                <MeetingSetup setIsSetupComplete={setIsSetupComplete} />
+              ) : (
+                <MeetingRoom />
+              )}
+            </MeetingRoomWrapper>
+          </StreamTheme>
+        </VideoElementProvider>
       </StreamCall>
     </main>
   );

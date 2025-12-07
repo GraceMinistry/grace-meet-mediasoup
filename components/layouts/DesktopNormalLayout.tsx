@@ -2,6 +2,7 @@ import {
   ParticipantView,
   StreamVideoParticipant,
 } from "@stream-io/video-react-sdk";
+import VideoRegistrar from "../VideoRegistrar";
 // import CustomParticipantViewUI from "../CustomParticipantViewUI";
 
 interface DesktopNormalLayoutProps {
@@ -63,6 +64,7 @@ const DesktopNormalLayout = ({
             participant={p}
             trackType="videoTrack"
             className="!h-full !w-full object-cover"
+            ParticipantViewUI={VideoRegistrar}
             // ParticipantViewUI={CustomParticipantViewUI}
           />
         </div>

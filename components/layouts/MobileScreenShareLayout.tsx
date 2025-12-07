@@ -3,6 +3,7 @@ import {
   StreamVideoParticipant,
 } from "@stream-io/video-react-sdk";
 // import CustomParticipantViewUI from "../CustomParticipantViewUI";
+import VideoRegistrar from "../VideoRegistrar";
 
 interface MobileScreenShareLayoutProps {
   participants: StreamVideoParticipant[];
@@ -35,6 +36,7 @@ const MobileScreenShareLayout = ({
         <ParticipantView
           participant={screenSharer}
           trackType="screenShareTrack"
+          ParticipantViewUI={VideoRegistrar}
           // ParticipantViewUI={CustomParticipantViewUI}
         />
       </div>
@@ -54,6 +56,7 @@ const MobileScreenShareLayout = ({
               <ParticipantView
                 participant={p}
                 trackType="videoTrack"
+                ParticipantViewUI={VideoRegistrar}
                 // ParticipantViewUI={CustomParticipantViewUI}
               />
             </div>
