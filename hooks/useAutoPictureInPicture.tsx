@@ -1,16 +1,93 @@
 // hooks/useAutoPictureInPicture.tsx
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { 
+import {
     useCallStateHooks,
-    hasScreenShare
+    hasScreenShare,
 } from "@stream-io/video-react-sdk";
 
+/* ------------------------------------------------------
+   FIXED AVATAR COLORS (rotates consistently per user)
+------------------------------------------------------- */
+const AVATAR_COLORS = [
+    "#FF6B6B", // red
+    "#4ECDC4", // teal
+    "#556270", // dark blue gray
+    "#C44DFF", // purple
+    "#45B7D1", // sky blue
+    "#FFA931", // orange
+    "#6BCB77", // green
+    "#F7B801", // gold
+];
+
+const getColorForUser = (userId: string) => {
+    let hash = 0;
+    for (let i = 0; i < userId.length; i++) {
+        hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+};
+
+/* ------------------------------------------------------
+   CREATE FAKE VIDEO STREAM FOR AVATAR (iOS SAFE)
+------------------------------------------------------- */
+const createAvatarVideoForParticipant = (participant: any) => {
+    const id = `avatar-video-${participant.sessionId}`;
+    const existing = document.getElementById(id) as HTMLVideoElement | null;
+    if (existing) return existing;
+
+    // Canvas for fake video stream
+    const canvas = document.createElement("canvas");
+    canvas.width = 640;
+    canvas.height = 360;
+    const ctx = canvas.getContext("2d")!;
+
+    // Background
+    ctx.fillStyle = "#1f1f1f";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Colored circle avatar (no initials)
+    const circleX = canvas.width / 2;
+    const circleY = canvas.height / 2 - 40;
+    const radius = 80;
+    ctx.beginPath();
+    ctx.arc(circleX, circleY, radius, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fillStyle = getColorForUser(participant.userId);
+    ctx.fill();
+
+    // Name text
+    ctx.fillStyle = "white";
+    ctx.font = "32px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(
+        participant.name || participant.userId,
+        canvas.width / 2,
+        circleY + radius + 40
+    );
+
+    // Create fake stream
+    const stream = canvas.captureStream(15);
+
+    // Create hidden HTMLVideoElement
+    const video = document.createElement("video");
+    video.id = id;
+    video.srcObject = stream;
+    video.muted = true;
+    video.playsInline = true;
+    video.style.display = "none";
+
+    document.body.appendChild(video);
+    video.play();
+
+    return video;
+};
+
+/* ------------------------------------------------------
+   MAIN HOOK
+------------------------------------------------------- */
 export const useAutoPictureInPicture = () => {
-    const { 
-        useDominantSpeaker, 
-        useHasOngoingScreenShare,
-        useParticipants 
-    } = useCallStateHooks();
+    const { useDominantSpeaker, useHasOngoingScreenShare, useParticipants } =
+        useCallStateHooks();
 
     const participants = useParticipants();
     const dominantSpeaker = useDominantSpeaker();
@@ -24,92 +101,101 @@ export const useAutoPictureInPicture = () => {
         [participants]
     );
 
-    // Priority logic for selecting participant
+    /* -------------------------------------------
+       Determine target participant for PiP
+    --------------------------------------------- */
     const getTargetParticipant = useCallback(() => {
-        // Priority 1: Screen sharer
-        if (hasOngoingScreenShare && screenSharer) {
-            return screenSharer;
-        }
-        // Priority 2: Dominant speaker
-        if (dominantSpeaker) {
-            return dominantSpeaker;
-        }
-        // Priority 3: First participant (sorted by Stream)
+        if (hasOngoingScreenShare && screenSharer) return screenSharer;
+        if (dominantSpeaker) return dominantSpeaker;
         return participants[0] || null;
     }, [dominantSpeaker, hasOngoingScreenShare, screenSharer, participants]);
 
-    const currentTargetParticipant = useMemo(() => getTargetParticipant(), [getTargetParticipant]);
+    const currentTargetParticipant = useMemo(
+        () => getTargetParticipant(),
+        [getTargetParticipant]
+    );
 
-    // Document PiP toggle (desktop)
+    /* -------------------------------------------
+       DOCUMENT PIP FOR DESKTOP
+    --------------------------------------------- */
     const toggleDocumentPiP = useCallback(async () => {
-        if (!("documentPictureInPicture" in window)) {
-            return;
-        }
+        if (!("documentPictureInPicture" in window)) return;
 
         if (pipWindow) {
             pipWindow.close();
             setPipWindow(null);
             setIsPiPActive(false);
-        } else {
-            try {
-                const pw = await (window as any).documentPictureInPicture.requestWindow({
-                    width: 400,
-                    height: 300
-                });
+            return;
+        }
 
-                // Copy stylesheets to PiP window
-                window.document.head
-                    .querySelectorAll('link[rel="stylesheet"], style')
-                    .forEach((node) => {
-                        pw.document.head.appendChild(node.cloneNode(true));
-                    });
+        try {
+            const pw = await (window as any).documentPictureInPicture.requestWindow({
+                width: 400,
+                height: 300,
+            });
 
-                // Handle window close
-                pw.addEventListener("pagehide", () => {
-                    setPipWindow(null);
-                    setIsPiPActive(false);
-                });
+            // Copy styles
+            document.head
+                .querySelectorAll("link[rel='stylesheet'], style")
+                .forEach((node) =>
+                    pw.document.head.appendChild(node.cloneNode(true))
+                );
 
-                setPipWindow(pw);
-                setIsPiPActive(true);
-            } catch (error) {
-                console.error("Document PiP failed:", error);
-            }
+            pw.addEventListener("pagehide", () => {
+                setPipWindow(null);
+                setIsPiPActive(false);
+            });
+
+            setPipWindow(pw);
+            setIsPiPActive(true);
+        } catch (err) {
+            console.error("Document PiP failed:", err);
         }
     }, [pipWindow]);
 
-    // Video PiP toggle (mobile fallback)
+    /* -------------------------------------------
+       VIDEO PIP FALLBACK (iOS/Android)
+    --------------------------------------------- */
     const toggleVideoPiP = useCallback(async () => {
         try {
             if (document.pictureInPictureElement) {
                 await document.exitPictureInPicture();
                 setIsPiPActive(false);
-            } else {
-                // Find video element for current target
-                if (!currentTargetParticipant) return;
-                
-                const videoElements = Array.from(document.querySelectorAll('video')) as HTMLVideoElement[];
-                let targetVideo: HTMLVideoElement | null = null;
-                
-                // Try to find the first active video
-                for (const video of videoElements) {
-                    if (video.srcObject && video.readyState >= 2) {
-                        targetVideo = video;
-                        break;
-                    }
-                }
-
-                if (targetVideo && 'requestPictureInPicture' in targetVideo) {
-                    await targetVideo.requestPictureInPicture();
-                    setIsPiPActive(true);
-                }
+                return;
             }
-        } catch (error) {
-            console.error("Video PiP failed:", error);
+
+            if (!currentTargetParticipant) return;
+
+            const videoEls = Array.from(
+                document.querySelectorAll("video")
+            ) as HTMLVideoElement[];
+
+            let targetVideo: HTMLVideoElement | null = null;
+
+            // Try to find REAL video first
+            targetVideo = videoEls.find(
+                (v) => v.srcObject && v.readyState >= 2
+            ) || null;
+
+            // If no real video: create avatar video
+            if (!targetVideo) {
+                targetVideo = createAvatarVideoForParticipant(currentTargetParticipant);
+            }
+
+            if (!targetVideo) return;
+
+            if ("requestPictureInPicture" in targetVideo) {
+                await targetVideo.requestPictureInPicture();
+                setIsPiPActive(true);
+            }
+        } catch (err) {
+            console.error("Video PiP failed:", err);
         }
     }, [currentTargetParticipant]);
 
-    // Unified toggle - prefer Document PiP, fallback to Video PiP
+    /* -------------------------------------------
+       UNIFIED TOGGLE
+    --------------------------------------------- */
     const togglePiP = useCallback(async () => {
         if ("documentPictureInPicture" in window) {
             await toggleDocumentPiP();
@@ -118,33 +204,37 @@ export const useAutoPictureInPicture = () => {
         }
     }, [toggleDocumentPiP, toggleVideoPiP]);
 
-    // Track Video PiP state changes
+    /* -------------------------------------------
+       Listen for PiP events
+    --------------------------------------------- */
     useEffect(() => {
-        const handleEnterPiP = () => setIsPiPActive(true);
-        const handleLeavePiP = () => setIsPiPActive(false);
+        const enter = () => setIsPiPActive(true);
+        const leave = () => setIsPiPActive(false);
 
-        document.addEventListener("enterpictureinpicture", handleEnterPiP);
-        document.addEventListener("leavepictureinpicture", handleLeavePiP);
+        document.addEventListener("enterpictureinpicture", enter);
+        document.addEventListener("leavepictureinpicture", leave);
 
         return () => {
-            document.removeEventListener("enterpictureinpicture", handleEnterPiP);
-            document.removeEventListener("leavepictureinpicture", handleLeavePiP);
+            document.removeEventListener("enterpictureinpicture", enter);
+            document.removeEventListener("leavepictureinpicture", leave);
         };
     }, []);
 
-    // Check if either PiP method is supported
-    const isPiPSupported = 
-        ("documentPictureInPicture" in window) || 
-        (typeof document !== 'undefined' && document.pictureInPictureEnabled === true);
-    
+    /* -------------------------------------------
+       SUPPORT CHECKS
+    --------------------------------------------- */
+    const isPiPSupported =
+        "documentPictureInPicture" in window ||
+        (document.pictureInPictureEnabled === true);
+
     const isDocumentPiP = !!pipWindow && isPiPActive;
 
-    return { 
-        togglePiP, 
-        isPiPActive, 
+    return {
+        togglePiP,
+        isPiPActive,
         isPiPSupported,
         pipWindow,
         currentTargetParticipant,
-        isDocumentPiP
+        isDocumentPiP,
     };
 };
