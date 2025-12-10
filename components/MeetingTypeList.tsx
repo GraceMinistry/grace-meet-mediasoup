@@ -9,7 +9,7 @@ import MeetingModal from "./MeetingModal";
 import { Call, useStreamVideoClient } from "@stream-io/video-react-sdk";
 import { useUser } from "@clerk/nextjs";
 import Loader from "./Loader";
-// import DateTimePicker from "./DateTimePicker";
+
 
 import { Textarea } from "./ui/textarea";
 import ReactDatePicker from "react-datepicker";
@@ -137,10 +137,7 @@ const MeetingTypeList = () => {
             <label className="text-base font-normal leading-[22.4px] text-sky-2">
               Select Date and Time
             </label>
-           {/* <DateTimePicker
-              value={values.dateTime}
-              onChange={(date) => setValues({ ...values, dateTime: date })}
-            />*/}
+          
             <ReactDatePicker
               selected={values.dateTime}
               onChange={(date) => setValues({ ...values, dateTime: date! })}
