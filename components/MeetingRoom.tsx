@@ -18,6 +18,9 @@ import CustomHostControls from "./CustomHostControls";
 import ReactionButton from "./ReactionButton";
 import CustomCallControls from "./CustomControls";
 import FloatingReactions from "./FloatingReactions";
+import ChatSidebar from "./ChatSidebar";
+import ChatButton from "./ChatButton";
+import { ensureCallChatChannel, addMemberToChatChannel } from "@/actions/stream.actions";
 
 const MeetingRoom = () => {
   const searchParams = useSearchParams();
@@ -34,9 +37,47 @@ const MeetingRoom = () => {
   const localParticipant = useLocalParticipant();
 
   const [showParticipants, setShowParticipants] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+
   const [, forceUpdate] = useState({});
 
   const isPersonalRoom = !!searchParams.get("personal");
+
+useEffect(() => {
+  if (!call || callingState !== CallingState.JOINED) return;
+
+  const setupChatChannel = async () => {
+    try {
+      // Get all participant IDs from the call
+      const participantIds = call.state.participants.map(p => p.userId).filter(Boolean) as string[];
+      
+      await ensureCallChatChannel(call.id, participantIds);
+    } catch (error) {
+      console.error("Failed to create chat channel:", error);
+    }
+  };
+
+  setupChatChannel();
+}, [call, callingState]);
+
+
+useEffect(() => {
+  if (!call) return;
+
+  const handleParticipantJoined = async (event: StreamVideoEvent) => {
+    if (event.type !== "call.session_participant_joined") return;
+    if (!event.participant?.user?.id) return;
+    
+    try {
+      await addMemberToChatChannel(call.id, event.participant.user.id);
+    } catch (error) {
+      console.error("Failed to add member to chat:", error);
+    }
+  };
+
+  call.on("call.session_participant_joined", handleParticipantJoined);
+  return () => call.off("call.session_participant_joined", handleParticipantJoined);
+}, [call]);
 
   // 🔄 Refresh UI when user's role changes
   useEffect(() => {
@@ -59,32 +100,29 @@ const MeetingRoom = () => {
     localParticipant?.roles?.includes("moderator");
 
   // 📡 RECEIVE reactions
-useEffect(() => {
-  if (!call) return;
+  useEffect(() => {
+    if (!call) return;
 
-  const handler = (event: any) => {
-    if (event.type !== "custom") return;
-    if (event.custom?.type !== "reaction") return;
+    const handler = (event: any) => {
+      if (event.type !== "custom") return;
+      if (event.custom?.type !== "reaction") return;
 
-    const { emoji, sessionId } = event.custom;
+      const { emoji, sessionId } = event.custom;
 
-    // ⛔ Ignore events *we* sent (we already animated locally)
-    const localId = call.state.localParticipant?.sessionId;
-    if (sessionId === localId) return;
+      // ⛔ Ignore events *we* sent (we already animated locally)
+      const localId = call.state.localParticipant?.sessionId;
+      if (sessionId === localId) return;
 
-    window.dispatchEvent(
-      new CustomEvent("spawn-reaction", {
-        detail: { emoji, sessionId },
-      })
-    );
-  };
+      window.dispatchEvent(
+        new CustomEvent("spawn-reaction", {
+          detail: { emoji, sessionId },
+        })
+      );
+    };
 
-  call.on("custom", handler);
-  return () => call.off("custom", handler);
-}, [call]);
-
-
-
+    call.on("custom", handler);
+    return () => call.off("custom", handler);
+  }, [call]);
 
   // --------------------------
   // 2️⃣ NOW WE ARE ALLOWED TO RETURN CONDITIONALLY
@@ -99,13 +137,13 @@ useEffect(() => {
   // --------------------------
 
   return (
-    <section className="relative h-screen w-full bg-[#0F1115] text-white">
+    <section className="relative h-screen w-full bg-[#0F1115] text-white overflow-hidden">
       <FloatingReactions />
 
       <div
         className={cn(
-          "h-full w-full flex overflow-hidden relative",
-          showParticipants && "mr-[300px]"
+          "h-full w-full flex overflow-hidden overflow-x-hidden relative",
+          (showParticipants || showChat) && "mr-[300px]"
         )}
       >
         <div className="flex-1 h-full relative">
@@ -114,13 +152,27 @@ useEffect(() => {
           </div>
         </div>
 
+        {/* CHAT SIDEBAR */}
+        <aside
+          className={cn(
+            `fixed top-0 h-full w-[300px]
+     bg-[#0d1117] border-l border-gray-700 shadow-xl
+     transition-transform duration-300 z-50 overflow-y-auto`,
+            showChat ? "translate-x-0 right-0" : "translate-x-full right-0"
+          )}
+        >
+          <ChatSidebar open={showChat} onClose={() => setShowChat(false)} />
+        </aside>
+
         {/* PARTICIPANTS SIDEBAR */}
         <aside
           className={cn(
-            `fixed right-0 top-0 h-full w-[300px]
-             bg-[#0d1117] border-l border-gray-700 shadow-xl
-             transition-transform duration-300 z-50 overflow-y-auto`,
-            showParticipants ? "translate-x-0" : "translate-x-full"
+            `fixed top-0 h-full w-[300px]
+     bg-[#0d1117] border-l border-gray-700 shadow-xl
+     transition-transform duration-300 z-50 overflow-y-auto`,
+            showParticipants
+              ? "translate-x-0 right-0"
+              : "translate-x-full right-0"
           )}
         >
           {isHostOrCoHost ? (
@@ -161,6 +213,9 @@ useEffect(() => {
               <Users size={20} />
             </div>
           </button>
+
+          <ChatButton onClick={() => setShowChat((prev) => !prev)} />
+
 
           {!isPersonalRoom && <EndCallButton />}
         </div>

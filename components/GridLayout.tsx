@@ -21,7 +21,7 @@ import DesktopScreenShareLayout from "./layouts/DesktopScreenShareLayout";
 import MobileNormalLayout from "./layouts/MobileNormalLayout";
 import MobileScreenShareLayout from "./layouts/MobileScreenShareLayout";
 import { PictureInPicture2, X } from "lucide-react";
-import FloatingReactions from "./FloatingReactions"; 
+
 
 
 const GridLayout = () => {
@@ -81,7 +81,7 @@ const GridLayout = () => {
 
   return (
     <div className="w-full h-full p-2 overflow-y-auto overscroll-contain">
-    {/*<FloatingReactions />*/}
+    
       {/* Unified PiP Toggle Button */}
       {isPiPSupported && (
         <button
