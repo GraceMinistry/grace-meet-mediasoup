@@ -3,9 +3,9 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "@/components/ui/sonner";
-import "@stream-io/video-react-sdk/dist/css/styles.css";
+// 🗑️ REMOVED: Stream CSS
 import { enUS } from "@clerk/localizations";
-import TestSocket from "@/components/TestSocket"
+import TestSocket from "@/components/TestSocket";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -57,7 +57,7 @@ export default function RootLayout({
         }}
       >
         <body className={`${inter.className} bg-dark-2`}>
-        <TestSocket />
+          <TestSocket />
           {children}
           <Toaster />
         </body>

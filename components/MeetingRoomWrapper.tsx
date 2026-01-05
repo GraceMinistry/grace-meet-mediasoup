@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useCallStateHooks } from "@stream-io/video-react-sdk";
+// 🗑️ REMOVED: useCallStateHooks import
 
-// 🔊 mediasoup (Phase 4 – signaling only)
+// 🔊 mediasoup
 import { getSocket } from "@/lib/socket";
 import { useMediasoup } from "@/lib/useMediasoup";
 
@@ -22,10 +22,10 @@ const notifyUser = () => {
 
 const MeetingRoomWrapper = ({ 
   children,
-  call
+  roomId // ✅ CHANGED: Now takes roomId instead of call object
 }: { 
   children: React.ReactNode;
-  call: any;
+  roomId: string; // ✅ CHANGED
 }) => {
   const wakeLockRef = useRef<any>(null);
   const miniRef = useRef<HTMLDivElement>(null);
@@ -34,8 +34,8 @@ const MeetingRoomWrapper = ({
   const [drag, setDrag] = useState({ x: 20, y: 80 });
   const [isDragging, setIsDragging] = useState(false);
 
-  const { useDominantSpeaker } = useCallStateHooks();
-  const dominantSpeaker = useDominantSpeaker();
+  // 🗑️ REMOVED: dominantSpeaker (We will re-implement this with mediasoup in Phase 7)
+  const dominantSpeaker = null; 
 
   // 🔊 mediasoup (socket + init)
   const socket = getSocket();
@@ -61,29 +61,23 @@ const MeetingRoomWrapper = ({
     if ("mediaSession" in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: "Active Meeting",
-        artist: "Custom Meet",
+        artist: "Grace Meet",
       });
       navigator.mediaSession.playbackState = "playing";
 
       navigator.mediaSession.setActionHandler("play", () => {
-        const audio = document.getElementById(
-          "background-audio-trick"
-        ) as HTMLAudioElement;
+        const audio = document.getElementById("background-audio-trick") as HTMLAudioElement;
         audio?.play().catch(() => {});
         navigator.mediaSession.playbackState = "playing";
       });
       navigator.mediaSession.setActionHandler("pause", () => {
-        const audio = document.getElementById(
-          "background-audio-trick"
-        ) as HTMLAudioElement;
+        const audio = document.getElementById("background-audio-trick") as HTMLAudioElement;
         audio?.pause();
         navigator.mediaSession.playbackState = "paused";
       });
     }
 
-    let audio = document.getElementById(
-      "background-audio-trick"
-    ) as HTMLAudioElement;
+    let audio = document.getElementById("background-audio-trick") as HTMLAudioElement;
     if (!audio) {
       audio = document.createElement("audio");
       audio.id = "background-audio-trick";
@@ -94,14 +88,10 @@ const MeetingRoomWrapper = ({
     }
 
     audio.play().catch((error) => {
-      console.warn(
-        "Autoplay blocked, background audio may be restricted.",
-        error
-      );
+      console.warn("Autoplay blocked, background audio may be restricted.", error);
     });
   };
 
-  // 🟢 Existing lifecycle (unchanged)
   useEffect(() => {
     if ("Notification" in window && Notification.permission !== "granted") {
       Notification.requestPermission();
@@ -113,12 +103,8 @@ const MeetingRoomWrapper = ({
     const handleVis = () => {
       const isHidden = document.hidden;
       setShowOverlay(isHidden);
-
-      if (isHidden) {
-        notifyUser();
-      } else {
-        requestWakeLock();
-      }
+      if (isHidden) notifyUser();
+      else requestWakeLock();
     };
 
     document.addEventListener("visibilitychange", handleVis);
@@ -132,15 +118,14 @@ const MeetingRoomWrapper = ({
     };
   }, []);
 
-  // 🔊 mediasoup Phase 4 – room join / leave (SAFE)
-useEffect(() => {
-  if (!call || !socket?.connected) return;
+  // 🔊 mediasoup Phase 4 – room join / leave
+  useEffect(() => {
+    if (!roomId || !socket?.connected) return;
 
-  const roomId = call.id;
-
-  initMediasoup(roomId).catch(console.error);
-
-}, [call?.id, socket?.connected]);
+    initMediasoup(roomId).catch(console.error);
+    
+    // Note: cleanup is handled inside the useMediasoup hook via its own useEffect
+  }, [roomId, socket?.connected, initMediasoup]);
 
 
   const onDragStart = () => setIsDragging(true);
@@ -150,7 +135,6 @@ useEffect(() => {
     if (!isDragging) return;
     const miniSize = 65;
     const halfSize = miniSize / 2;
-
     setDrag({
       x: Math.max(10, e.clientX - halfSize),
       y: Math.max(10, e.clientY - halfSize),
@@ -172,7 +156,7 @@ useEffect(() => {
           className={`
             fixed z-[99999] cursor-pointer rounded-full 
             shadow-lg overflow-hidden transition-all duration-300
-            ${dominantSpeaker ? "ring-4 ring-blue-400" : ""}
+            ${dominantSpeaker ? "ring-4 ring-red-2" : ""}
           `}
           style={{
             width: 65,
@@ -181,8 +165,8 @@ useEffect(() => {
             top: drag.y,
           }}
         >
-          <div className="w-full h-full bg-black/60 flex items-center justify-center text-white text-sm">
-            Live
+          <div className="w-full h-full bg-black/60 flex items-center justify-center text-white text-xs font-bold">
+            LIVE
           </div>
         </div>
       )}
