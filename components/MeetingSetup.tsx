@@ -35,15 +35,10 @@ const MeetingSetup = ({
   const [isMicCamToggled, setIsMicCamToggled] = useState(false);
 
   useEffect(() => {
-    // ❌ Phase 1: Always disable Stream audio (mediasoup handles it)
+    // ❌ Phase 3: Always disable Stream audio and video (mediasoup handles them)
     call.microphone.disable();
-
-    if (isMicCamToggled) {
-      call.camera.disable();
-    } else {
-      call.camera.enable();
-    }
-  }, [isMicCamToggled, call.camera, call.microphone]);
+    call.camera.disable();
+  }, [call.camera, call.microphone]);
 
   if (callTimeNotArrived)
     return (
@@ -71,7 +66,7 @@ const MeetingSetup = ({
             checked={isMicCamToggled}
             onChange={(e) => setIsMicCamToggled(e.target.checked)}
           />
-          Join with camera off (audio via mediasoup)
+          Join with audio/video off (mediasoup enabled)
         </label>
         <DeviceSettings />
       </div>

@@ -2,13 +2,13 @@ import {
   CancelCallButton,
   ScreenShareButton,
   SpeakingWhileMutedNotification,
-  ToggleVideoPublishingButton,
   useCall,
   RecordCallButton,
 } from "@stream-io/video-react-sdk";
 import { useRouter } from "next/navigation";
 import { useCallStateHooks } from "@stream-io/video-react-sdk";
 import MediasoupAudioButton from "./MediasoupAudioButton";
+import MediasoupVideoButton from "./MediasoupVideoButton";
 
 const CustomCallControls = () => {
   const call = useCall();
@@ -26,7 +26,7 @@ const CustomCallControls = () => {
         <MediasoupAudioButton />
       </SpeakingWhileMutedNotification>
 
-      <ToggleVideoPublishingButton />
+      <MediasoupVideoButton />
 
       <CancelCallButton onLeave={() => router.push("/")} />
 

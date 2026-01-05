@@ -40,7 +40,7 @@ const MeetingRoomWrapper = ({
 
   // 🔊 mediasoup (socket + init)
   const socket = getSocket();
-  const { initMediasoup, muteAudio, unmuteAudio, isAudioMuted } = useMediasoup(socket);
+  const { initMediasoup, muteAudio, unmuteAudio, isAudioMuted, enableVideo, disableVideo, toggleVideo, isVideoEnabled } = useMediasoup(socket);
   const mediasoupContext = useMediasoupContext();
 
   const requestWakeLock = async () => {
@@ -134,7 +134,7 @@ const MeetingRoomWrapper = ({
     };
   }, []);
 
-  // 🔊 mediasoup Phase 1 – room join / leave with socket connection
+  // 🔊 mediasoup Phase 1 & 3 – room join / leave with socket connection
 useEffect(() => {
   if (!call) return;
 
@@ -154,6 +154,10 @@ useEffect(() => {
           muteAudio,
           unmuteAudio,
           isAudioMuted,
+          enableVideo,
+          disableVideo,
+          toggleVideo,
+          isVideoEnabled,
         });
       })
       .catch(console.error);

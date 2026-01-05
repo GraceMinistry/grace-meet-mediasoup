@@ -5,16 +5,30 @@ import * as mediasoupClient from "mediasoup-client";
 import type { Socket } from "socket.io-client";
 import { getMicTrack } from "@/lib/useMicrophone";
 
+async function getCameraTrack() {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      frameRate: { ideal: 30 },
+    },
+  });
+  return stream.getVideoTracks()[0];
+}
+
 export function useMediasoup(socket: Socket | null) {
   const deviceRef = useRef<mediasoupClient.Device | null>(null);
   const sendTransportRef = useRef<any>(null);
   const recvTransportRef = useRef<any>(null);
   const startedRef = useRef(false);
   const audioElementsRef = useRef<HTMLAudioElement[]>([]);
+  const videoElementsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const micTrackRef = useRef<MediaStreamTrack | null>(null);
+  const camTrackRef = useRef<MediaStreamTrack | null>(null);
   const newProducerHandlerRef = useRef<any>(null);
   const unloadBoundRef = useRef(false);
   const audioProducerRef = useRef<any>(null);
+  const videoProducerRef = useRef<any>(null);
 
   const initMediasoup = async (roomId: string) => {
     if (!socket) return;
@@ -116,7 +130,7 @@ export function useMediasoup(socket: Socket | null) {
     recvTransportRef.current = recvTransport;
 
     /* =========================
-        CONSUME AUDIO LOGIC
+        CONSUME AUDIO/VIDEO LOGIC
     ========================= */
 
     // We create a function so we can use it for BOTH new and existing producers
@@ -143,12 +157,22 @@ export function useMediasoup(socket: Socket | null) {
       });
 
       const stream = new MediaStream([consumer.track]);
-      const audio = document.createElement("audio");
-      audio.srcObject = stream;
-      audio.autoplay = true;
-      (audio as any).playsInline = true;
-      document.body.appendChild(audio);
-      audioElementsRef.current.push(audio);
+
+      if (consumer.kind === "audio") {
+        const audio = document.createElement("audio");
+        audio.srcObject = stream;
+        audio.autoplay = true;
+        (audio as any).playsInline = true;
+        document.body.appendChild(audio);
+        audioElementsRef.current.push(audio);
+      } else if (consumer.kind === "video") {
+        // Video will be handled by VideoRegistrar component
+        // Store consumer info for later retrieval
+        const event = new CustomEvent("mediasoup-video-consumer", {
+          detail: { consumerId: consumer.id, producerId: data.producerId, stream },
+        });
+        window.dispatchEvent(event);
+      }
 
       socket.emit("resume-consumer", {
         roomId,
@@ -185,9 +209,15 @@ export function useMediasoup(socket: Socket | null) {
     micTrackRef.current?.stop();
     micTrackRef.current = null;
 
-    // 🔥 Close producer
+    // 🔥 Stop camera
+    camTrackRef.current?.stop();
+    camTrackRef.current = null;
+
+    // 🔥 Close producers
     audioProducerRef.current?.close();
     audioProducerRef.current = null;
+    videoProducerRef.current?.close();
+    videoProducerRef.current = null;
 
     // 🔥 Close transports
     sendTransportRef.current?.close();
@@ -203,6 +233,9 @@ export function useMediasoup(socket: Socket | null) {
       audio.remove();
     });
     audioElementsRef.current = [];
+
+    // 🔥 Remove video elements
+    videoElementsRef.current.clear();
 
     if (newProducerHandlerRef.current && socket) {
       socket.off("new-producer", newProducerHandlerRef.current);
@@ -230,6 +263,59 @@ export function useMediasoup(socket: Socket | null) {
     return audioProducerRef.current ? audioProducerRef.current.paused : true;
   };
 
+  const enableVideo = async () => {
+    if (!sendTransportRef.current || videoProducerRef.current) return;
+
+    try {
+      const track = await getCameraTrack();
+      camTrackRef.current = track;
+
+      const producer = await sendTransportRef.current.produce({ track });
+      videoProducerRef.current = producer;
+      
+      // Dispatch event for local video
+      const event = new CustomEvent("mediasoup-local-video", {
+        detail: { stream: new MediaStream([track]) },
+      });
+      window.dispatchEvent(event);
+
+      console.log("📹 Video producer created");
+    } catch (error) {
+      console.error("Failed to enable video:", error);
+    }
+  };
+
+  const disableVideo = () => {
+    if (camTrackRef.current) {
+      camTrackRef.current.stop();
+      camTrackRef.current = null;
+    }
+    if (videoProducerRef.current) {
+      videoProducerRef.current.close();
+      videoProducerRef.current = null;
+      
+      // Dispatch event to clear local video
+      const event = new CustomEvent("mediasoup-local-video", {
+        detail: { stream: null },
+      });
+      window.dispatchEvent(event);
+      
+      console.log("📹 Video disabled");
+    }
+  };
+
+  const toggleVideo = async () => {
+    if (videoProducerRef.current) {
+      disableVideo();
+    } else {
+      await enableVideo();
+    }
+  };
+
+  const isVideoEnabled = () => {
+    return !!videoProducerRef.current;
+  };
+
   useEffect(() => {
     return () => {
       cleanup(); 
@@ -241,7 +327,11 @@ export function useMediasoup(socket: Socket | null) {
     cleanup, 
     muteAudio, 
     unmuteAudio, 
-    isAudioMuted 
+    isAudioMuted,
+    enableVideo,
+    disableVideo,
+    toggleVideo,
+    isVideoEnabled,
   };
 
 }
