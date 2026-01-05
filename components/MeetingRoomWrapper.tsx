@@ -6,6 +6,7 @@ import { useCallStateHooks } from "@stream-io/video-react-sdk";
 // 🔊 mediasoup (Phase 4 – signaling only)
 import { getSocket } from "@/lib/socket";
 import { useMediasoup } from "@/lib/useMediasoup";
+import { useMediasoupContext } from "@/contexts/MediasoupContext";
 
 const notifyUser = () => {
   if ("Notification" in window && Notification.permission === "granted") {
@@ -39,7 +40,8 @@ const MeetingRoomWrapper = ({
 
   // 🔊 mediasoup (socket + init)
   const socket = getSocket();
-  const { initMediasoup } = useMediasoup(socket);
+  const { initMediasoup, muteAudio, unmuteAudio, isAudioMuted } = useMediasoup(socket);
+  const mediasoupContext = useMediasoupContext();
 
   const requestWakeLock = async () => {
     try {
@@ -132,15 +134,41 @@ const MeetingRoomWrapper = ({
     };
   }, []);
 
-  // 🔊 mediasoup Phase 4 – room join / leave (SAFE)
+  // 🔊 mediasoup Phase 1 – room join / leave with socket connection
 useEffect(() => {
-  if (!call || !socket?.connected) return;
+  if (!call) return;
 
   const roomId = call.id;
 
-  initMediasoup(roomId).catch(console.error);
+  // Connect socket if not already connected
+  if (!socket.connected) {
+    socket.connect();
+  }
 
-}, [call?.id, socket?.connected]);
+  // Wait for socket to be connected before initializing mediasoup
+  const handleSocketConnect = () => {
+    initMediasoup(roomId)
+      .then(() => {
+        // Register controls after mediasoup is initialized
+        mediasoupContext.registerMediasoupControls({
+          muteAudio,
+          unmuteAudio,
+          isAudioMuted,
+        });
+      })
+      .catch(console.error);
+  };
+
+  if (socket.connected) {
+    handleSocketConnect();
+  } else {
+    socket.once("connect", handleSocketConnect);
+  }
+
+  return () => {
+    socket.off("connect", handleSocketConnect);
+  };
+}, [call?.id]);
 
 
   const onDragStart = () => setIsDragging(true);

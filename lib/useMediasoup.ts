@@ -14,6 +14,7 @@ export function useMediasoup(socket: Socket | null) {
   const micTrackRef = useRef<MediaStreamTrack | null>(null);
   const newProducerHandlerRef = useRef<any>(null);
   const unloadBoundRef = useRef(false);
+  const audioProducerRef = useRef<any>(null);
 
   const initMediasoup = async (roomId: string) => {
     if (!socket) return;
@@ -78,7 +79,7 @@ export function useMediasoup(socket: Socket | null) {
     const track = await getMicTrack();
     micTrackRef.current = track;
 
-    await sendTransport.produce({
+    const producer = await sendTransport.produce({
       track,
       codecOptions: {
         opusStereo: false,
@@ -86,6 +87,7 @@ export function useMediasoup(socket: Socket | null) {
       },
     });
 
+    audioProducerRef.current = producer;
     sendTransportRef.current = sendTransport;
     console.log("🎤 Audio producer created");
 
@@ -183,6 +185,10 @@ export function useMediasoup(socket: Socket | null) {
     micTrackRef.current?.stop();
     micTrackRef.current = null;
 
+    // 🔥 Close producer
+    audioProducerRef.current?.close();
+    audioProducerRef.current = null;
+
     // 🔥 Close transports
     sendTransportRef.current?.close();
     recvTransportRef.current?.close();
@@ -206,12 +212,36 @@ export function useMediasoup(socket: Socket | null) {
     startedRef.current = false;
   };
 
+  const muteAudio = () => {
+    if (audioProducerRef.current && !audioProducerRef.current.paused) {
+      audioProducerRef.current.pause();
+      console.log("🔇 Audio muted");
+    }
+  };
+
+  const unmuteAudio = () => {
+    if (audioProducerRef.current && audioProducerRef.current.paused) {
+      audioProducerRef.current.resume();
+      console.log("🔊 Audio unmuted");
+    }
+  };
+
+  const isAudioMuted = () => {
+    return audioProducerRef.current ? audioProducerRef.current.paused : true;
+  };
+
   useEffect(() => {
     return () => {
       cleanup(); 
     };
   }, []);
 
-  return { initMediasoup, cleanup };
+  return { 
+    initMediasoup, 
+    cleanup, 
+    muteAudio, 
+    unmuteAudio, 
+    isAudioMuted 
+  };
 
 }
