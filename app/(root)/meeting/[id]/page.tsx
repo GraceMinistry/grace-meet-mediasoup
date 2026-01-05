@@ -12,6 +12,7 @@ import MeetingSetup from '@/components/MeetingSetup';
 import MeetingRoom from '@/components/MeetingRoom';
 import { VideoElementProvider } from '@/contexts/VideoElementContext';
 import MeetingRoomWrapper from '@/components/MeetingRoomWrapper';
+import { MediasoupProvider } from '@/contexts/MediasoupContext';
 
 const MeetingPage = () => {
   const { id: rawId } = useParams();
@@ -37,13 +38,15 @@ const MeetingPage = () => {
       <StreamCall call={call}>
         <VideoElementProvider>
           <StreamTheme>
-            <MeetingRoomWrapper call={call}>
-              {!isSetupComplete ? (
-                <MeetingSetup setIsSetupComplete={setIsSetupComplete} />
-              ) : (
-                <MeetingRoom />
-              )}
-            </MeetingRoomWrapper>
+            <MediasoupProvider>
+              <MeetingRoomWrapper call={call}>
+                {!isSetupComplete ? (
+                  <MeetingSetup setIsSetupComplete={setIsSetupComplete} />
+                ) : (
+                  <MeetingRoom />
+                )}
+              </MeetingRoomWrapper>
+            </MediasoupProvider>
           </StreamTheme>
         </VideoElementProvider>
       </StreamCall>
