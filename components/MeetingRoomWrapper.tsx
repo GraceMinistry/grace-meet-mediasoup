@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 // 🔊 mediasoup
 import { getSocket } from "@/lib/socket";
 import { useMediasoup } from "@/lib/useMediasoup";
+import { useMediasoupContext } from "@/contexts/MediasoupContext";
 
 const notifyUser = () => {
   if ("Notification" in window && Notification.permission === "granted") {
@@ -39,7 +40,8 @@ const MeetingRoomWrapper = ({
 
   // 🔊 mediasoup (socket + init)
   const socket = getSocket();
-  const { initMediasoup } = useMediasoup(socket);
+  const { initMediasoup, muteAudio, unmuteAudio, isAudioMuted, enableVideo, disableVideo, toggleVideo, isVideoEnabled } = useMediasoup(socket);
+  const mediasoupContext = useMediasoupContext();
 
   const requestWakeLock = async () => {
     try {
@@ -118,14 +120,45 @@ const MeetingRoomWrapper = ({
     };
   }, []);
 
-  // 🔊 mediasoup Phase 4 – room join / leave
-  useEffect(() => {
-    if (!roomId || !socket?.connected) return;
+  // 🔊 mediasoup Phase 1 & 3 – room join / leave with socket connection
+useEffect(() => {
+  if (!call) return;
 
-    initMediasoup(roomId).catch(console.error);
-    
-    // Note: cleanup is handled inside the useMediasoup hook via its own useEffect
-  }, [roomId, socket?.connected, initMediasoup]);
+  const roomId = call.id;
+
+  // Connect socket if not already connected
+  if (!socket.connected) {
+    socket.connect();
+  }
+
+  // Wait for socket to be connected before initializing mediasoup
+  const handleSocketConnect = () => {
+    initMediasoup(roomId)
+      .then(() => {
+        // Register controls after mediasoup is initialized
+        mediasoupContext.registerMediasoupControls({
+          muteAudio,
+          unmuteAudio,
+          isAudioMuted,
+          enableVideo,
+          disableVideo,
+          toggleVideo,
+          isVideoEnabled,
+        });
+      })
+      .catch(console.error);
+  };
+
+  if (socket.connected) {
+    handleSocketConnect();
+  } else {
+    socket.once("connect", handleSocketConnect);
+  }
+
+  return () => {
+    socket.off("connect", handleSocketConnect);
+  };
+}, [call?.id]);
 
 
   const onDragStart = () => setIsDragging(true);

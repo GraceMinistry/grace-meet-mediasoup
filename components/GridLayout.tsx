@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { PictureInPicture2 } from "lucide-react";
 import MediasoupTile from "./MediasoupTile";
-import { useMediasoupContext } from "@/providers/MediasoupProvider";
+import { useMediasoupContext } from "@/contexts/MediasoupContext";
 
 interface Participant {
   id: string;
@@ -13,10 +13,14 @@ interface Participant {
 interface GridLayoutProps {
   participants: Participant[];
   remoteStreams: Map<string, MediaStream>;
-  localStream?: MediaStream | null; // We'll pass this from our useMediasoupCall hook later
+  localStream?: MediaStream | null;
 }
 
-const GridLayout = ({ participants, remoteStreams, localStream }: GridLayoutProps) => {
+const GridLayout = ({
+  participants,
+  remoteStreams,
+  localStream,
+}: GridLayoutProps) => {
   // ✅ Extract socket from context
   const { socket } = useMediasoupContext();
 
@@ -48,20 +52,20 @@ const GridLayout = ({ participants, remoteStreams, localStream }: GridLayoutProp
         />
 
         {/* 2. REMOTE PARTICIPANTS */}
-       {participants
+        {participants
           // ✅ Filter out the local user so you don't see yourself twice
-          .filter((p) => p.id !== socket?.id) 
+          .filter((p) => p.id !== socket?.id)
           .map((participant) => {
             const stream = remoteStreams.get(participant.id);
-            
+
             return (
-              <MediasoupTile 
+              <MediasoupTile
                 key={participant.id}
                 stream={stream}
                 participantName={participant.name}
               />
             );
-        })}
+          })}
       </div>
 
       <div className="fixed top-4 right-4 z-50">

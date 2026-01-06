@@ -78,7 +78,7 @@ const MeetingSetup = ({
             checked={isMicCamToggled}
             onChange={(e) => setIsMicCamToggled(e.target.checked)}
           />
-          Join with mic and camera off
+          Join with audio/video off (mediasoup enabled)
         </label>
       </div>
 

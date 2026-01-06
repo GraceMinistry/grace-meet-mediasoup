@@ -6,57 +6,60 @@ import { Users } from "lucide-react";
 
 import ChatSidebar from "./ChatSidebar";
 import ChatButton from "./ChatButton";
-import GridLayout from "./GridLayout"; 
+import GridLayout from "./GridLayout";
+import CustomControls from "./CustomControls";
 import { cn } from "@/lib/utils";
-import { useMediasoupContext } from "@/providers/MediasoupProvider";
-import { useMediasoupMedia } from "@/hooks/useMediasoupMedia";
+import { useMediasoupContext } from "@/contexts/MediasoupContext";
 
 const MeetingRoom = () => {
   const params = useParams();
   const router = useRouter();
   const roomId = (params?.id as string) || "default-room";
 
-  // ✅ 1. Get real-time data from Mediasoup Context
-  const { socket, participants, remoteStreams, isInitialized } = useMediasoupContext();
-  const { localStream, startMedia } = useMediasoupMedia();
-
+  // ✅ Get real-time data from Mediasoup Context
+  const {
+    socket,
+    participants,
+    remoteStreams,
+    localStream,
+    isInitialized,
+    joinRoom,
+  } = useMediasoupContext();
 
   const [showParticipants, setShowParticipants] = useState(false);
   const [showChat, setShowChat] = useState(false);
 
-  // ✅ 2. Join the Mediasoup room on mount
+  // ✅ Join the Mediasoup room on mount
   useEffect(() => {
-    if (isInitialized && socket) {
-      startMedia(); 
+    if (socket && !isInitialized) {
       console.log("🚀 Joining Mediasoup Room:", roomId);
-      socket.emit("join-room", { roomId });
+      joinRoom(roomId);
     }
-  }, [isInitialized, socket, roomId]);
+  }, [socket, isInitialized, roomId, joinRoom]);
 
   return (
     <section className="relative h-screen w-full bg-[#0F1115] text-white overflow-hidden">
-      
       <div
         className={cn(
           "h-full w-full flex overflow-hidden relative transition-all duration-300",
-          (showParticipants || showChat) ? "pr-0 lg:pr-[300px]" : "pr-0"
+          showParticipants || showChat ? "pr-0 lg:pr-[300px]" : "pr-0"
         )}
       >
         {/* VIDEO GRID AREA */}
         <div className="flex-1 h-full relative">
-           {/* ✅ 3. Pass real streams and participants to the grid */}
-           <GridLayout 
-             participants={participants} 
-             remoteStreams={remoteStreams} 
-             localStream={localStream}
-           /> 
+          {/* ✅ Pass real streams and participants to the grid */}
+          <GridLayout
+            participants={participants}
+            remoteStreams={remoteStreams}
+            localStream={localStream}
+          />
         </div>
 
         {/* CHAT SIDEBAR */}
-        <ChatSidebar 
-          open={showChat} 
-          onClose={() => setShowChat(false)} 
-          roomId={roomId} 
+        <ChatSidebar
+          open={showChat}
+          onClose={() => setShowChat(false)}
+          roomId={roomId}
         />
 
         {/* PARTICIPANTS SIDEBAR */}
@@ -70,10 +73,17 @@ const MeetingRoom = () => {
         >
           <div className="p-6">
             <div className="flex justify-between items-center mb-6">
-               <h2 className="text-xl font-bold">Participants ({participants.length})</h2>
-               <button onClick={() => setShowParticipants(false)} className="text-gray-400">✕</button>
+              <h2 className="text-xl font-bold">
+                Participants ({participants.length})
+              </h2>
+              <button
+                onClick={() => setShowParticipants(false)}
+                className="text-gray-400"
+              >
+                ✕
+              </button>
             </div>
-            
+
             {/* ✅ 4. Map through real Mediasoup participants */}
             <div className="flex flex-col gap-4">
               {participants.map((p) => (
@@ -81,7 +91,9 @@ const MeetingRoom = () => {
                   <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs">
                     {p.name.charAt(0).toUpperCase()}
                   </div>
-                  <span className="text-sm font-medium">{p.name} {p.id === socket?.id ? "(You)" : ""}</span>
+                  <span className="text-sm font-medium">
+                    {p.name} {p.id === socket?.id ? "(You)" : ""}
+                  </span>
                 </div>
               ))}
             </div>
@@ -92,12 +104,18 @@ const MeetingRoom = () => {
       {/* CONTROLS BAR */}
       <div className="fixed bottom-0 left-0 w-full flex justify-center pb-6 z-40">
         <div className="flex items-center justify-center gap-3 bg-black/60 px-5 py-3 rounded-2xl border border-white/10 backdrop-blur-2xl shadow-2xl">
-          
-          <button onClick={() => setShowParticipants((p) => !p)} className="relative">
-            <div className={cn(
+          <button
+            onClick={() => setShowParticipants((p) => !p)}
+            className="relative"
+          >
+            <div
+              className={cn(
                 "cursor-pointer rounded-xl px-4 py-2 border transition",
-                showParticipants ? "bg-blue-600 border-blue-400" : "bg-[#1c2732] border-white/10 hover:bg-[#2c3641]"
-            )}>
+                showParticipants
+                  ? "bg-blue-600 border-blue-400"
+                  : "bg-[#1c2732] border-white/10 hover:bg-[#2c3641]"
+              )}
+            >
               <Users size={20} />
               {participants.length > 0 && (
                 <span className="absolute -top-1 -right-1 bg-blue-500 text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
@@ -109,18 +127,19 @@ const MeetingRoom = () => {
 
           <ChatButton onClick={() => setShowChat((p) => !p)} />
 
-          <div className="w-[1px] h-6 bg-white/10 mx-2" />
+          <div className="w-px h-6 bg-white/10 mx-2" />
 
-          {/* We will add Mute/Camera toggle buttons here in the next step */}
+          {/* Media Controls */}
+          <CustomControls />
 
-          <button 
-              className="cursor-pointer rounded-xl bg-red-600 px-6 py-2 border border-red-400 hover:bg-red-700 transition font-medium"
-              onClick={() => {
-                socket?.disconnect();
-                router.push('/');
-              }}
+          <button
+            className="cursor-pointer rounded-xl bg-red-600 px-6 py-2 border border-red-400 hover:bg-red-700 transition font-medium"
+            onClick={() => {
+              socket?.disconnect();
+              router.push("/");
+            }}
           >
-              Leave
+            Leave
           </button>
         </div>
       </div>
