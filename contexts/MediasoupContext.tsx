@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useRef, useState, useEffect } from "react";
 import type { Socket } from "socket.io-client";
-import { io } from "socket.io-client";
+import { getSocket } from "@/lib/socket";
 import { Device, types } from "mediasoup-client";
 
 interface Participant {
@@ -79,22 +79,31 @@ export const MediasoupProvider = ({
   const hasJoinedRef = useRef<boolean>(false);
 
   useEffect(() => {
-    const socketInstance = io(
-      process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8080",
-      {
-        transports: ["websocket"],
-        autoConnect: true,
-      }
-    );
+    // Use the shared socket instance
+    const socketInstance = getSocket();
 
-    socketInstance.on("connect", () => {
-      console.log("✅ Socket connected:", socketInstance.id);
+    // Set up event listeners
+    const handleConnect = () => {
+      console.log("✅ Mediasoup socket connected:", socketInstance.id);
       setSocket(socketInstance);
-    });
+    };
 
-    socketInstance.on("disconnect", () => {
-      console.log("❌ Socket disconnected");
-    });
+    const handleReconnect = () => {
+      console.log("🔄 Mediasoup socket reconnected:", socketInstance.id);
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Mediasoup socket disconnected");
+    };
+
+    // If already connected, trigger handler immediately
+    if (socketInstance.connected) {
+      handleConnect();
+    }
+
+    socketInstance.on("connect", handleConnect);
+    socketInstance.on("reconnect", handleReconnect);
+    socketInstance.on("disconnect", handleDisconnect);
 
     socketInstance.on(
       "participant-list-update",
@@ -199,7 +208,17 @@ export const MediasoupProvider = ({
     );
 
     return () => {
-      socketInstance.disconnect();
+      // Clean up event listeners but don't disconnect the shared socket
+      // as it may be used by other components (e.g., chat)
+      socketInstance.off("connect", handleConnect);
+      socketInstance.off("reconnect", handleReconnect);
+      socketInstance.off("disconnect", handleDisconnect);
+      socketInstance.off("participant-list-update");
+      socketInstance.off("participant-left");
+      socketInstance.off("force-mute");
+      socketInstance.off("force-video-pause");
+      socketInstance.off("kicked-from-room");
+      socketInstance.off("new-producer");
     };
   }, []);
 
@@ -290,6 +309,13 @@ export const MediasoupProvider = ({
         "🎉 Joined mediasoup room, existing producers:",
         existingProducers
       );
+      console.log("📝 Producer details:", {
+        isArray: Array.isArray(existingProducers),
+        length: existingProducers?.length,
+        items: existingProducers,
+        firstItem: existingProducers?.[0],
+        firstItemType: typeof existingProducers?.[0],
+      });
 
       // Step 4: Create Send Transport
       await createSendTransport(socket, newDevice, roomId);
@@ -299,16 +325,41 @@ export const MediasoupProvider = ({
 
       // Step 6: Consume Existing Producers
       if (existingProducers && existingProducers.length > 0) {
-        for (const producerId of existingProducers) {
-          await consumeProducer(socket, newDevice, roomId, producerId);
+        console.log("🔄 Starting to consume existing producers...");
+        for (const item of existingProducers) {
+          // Handle both string IDs and objects
+          const producerId =
+            typeof item === "string" ? item : item?.id || item?.producerId;
+
+          if (producerId) {
+            console.log("➡️ Consuming producer:", producerId);
+            await consumeProducer(socket, newDevice, roomId, producerId);
+          } else {
+            console.error("❌ Invalid producer item:", item);
+          }
         }
+      } else {
+        console.log("ℹ️ No existing producers to consume");
       }
 
       // Step 7: Listen for New Producers
       socket.on(
         "new-producer",
-        async ({ producerId }: { producerId: string }) => {
-          console.log("🆕 New producer detected:", producerId);
+        async ({
+          producerId,
+          peerId,
+          kind,
+        }: {
+          producerId: string;
+          peerId?: string;
+          kind?: string;
+        }) => {
+          console.log("🆕 New producer detected:", {
+            producerId,
+            peerId,
+            kind,
+            from: peerId || "unknown",
+          });
           await consumeProducer(socket, newDevice, roomId, producerId);
         }
       );
@@ -355,16 +406,29 @@ export const MediasoupProvider = ({
       );
     });
 
-    transport.on("produce", ({ kind, rtpParameters }, callback, errback) => {
-      socket.emit(
-        "produce",
-        { roomId, transportId: transport.id, kind, rtpParameters },
-        (response: any) => {
-          if (response.error) return errback(response.error);
-          callback({ id: response.id });
-        }
-      );
-    });
+    transport.on(
+      "produce",
+      ({ kind, rtpParameters, appData }, callback, errback) => {
+        console.log(`📤 Producing ${kind} for transport:`, transport.id);
+        socket.emit(
+          "produce",
+          { roomId, transportId: transport.id, kind, rtpParameters, appData },
+          (response: any) => {
+            if (response.error) {
+              console.error("❌ Produce error:", response.error);
+              return errback(response.error);
+            }
+            console.log(
+              `✅ Producer created with ID:`,
+              response.id,
+              "for",
+              kind
+            );
+            callback({ id: response.id });
+          }
+        );
+      }
+    );
 
     sendTransportRef.current = transport;
     console.log("🚚 Send transport created");
@@ -414,21 +478,28 @@ export const MediasoupProvider = ({
     roomId: string,
     producerId: string
   ) => {
+    console.log("🔍 Attempting to consume producer:", producerId);
+
     const data = await new Promise<any>((resolve, reject) => {
       socket.emit(
         "consume",
         { roomId, producerId, rtpCapabilities: device.rtpCapabilities },
         (response: any) => {
           if (response.error) {
+            console.error("❌ Consume error:", response.error);
             reject(response.error);
           } else {
+            console.log("✅ Consume response:", response);
             resolve(response);
           }
         }
       );
     });
 
-    if (!recvTransportRef.current) return;
+    if (!recvTransportRef.current) {
+      console.error("❌ No receive transport available");
+      return;
+    }
 
     const consumer = await recvTransportRef.current.consume({
       id: data.id,
@@ -437,20 +508,45 @@ export const MediasoupProvider = ({
       rtpParameters: data.rtpParameters,
     });
 
+    console.log("📦 Consumer created:", {
+      id: consumer.id,
+      kind: consumer.kind,
+      producerId: consumer.producerId,
+    });
+
     socket.emit("resume-consumer", { roomId, consumerId: consumer.id });
 
     const { track } = consumer;
-    const peerId = data.peerId || data.producerId; // Adjust based on your server response
+    // Try multiple ways to get peerId from server response
+    const peerId =
+      data.peerId || data.producerSocketId || data.userId || producerId;
+
+    console.log(
+      `🎬 Consuming ${data.kind} from peer:`,
+      peerId,
+      "(track id:",
+      track.id,
+      ")"
+    );
 
     setRemoteStreams((prev) => {
       const newMap = new Map(prev);
       const existingStream = newMap.get(peerId) || new MediaStream();
-      existingStream.addTrack(track);
+
+      // Check if track already exists to avoid duplicates
+      const existingTrack = existingStream
+        .getTracks()
+        .find((t) => t.id === track.id);
+      if (!existingTrack) {
+        existingStream.addTrack(track);
+        console.log(`✅ Added ${data.kind} track to stream for peer:`, peerId);
+      } else {
+        console.log(`⚠️ Track already exists in stream for peer:`, peerId);
+      }
+
       newMap.set(peerId, existingStream);
       return newMap;
     });
-
-    console.log(`🎬 Consuming ${data.kind} from peer:`, peerId);
   };
 
   // Start Audio

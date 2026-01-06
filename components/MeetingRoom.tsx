@@ -11,6 +11,7 @@ import GridLayout from "./GridLayout";
 import CustomControls from "./CustomControls";
 import CustomHostControls from "./CustomHostControls";
 import ParticipantSidebar from "./ParticipantSidebar";
+import { SocketDebug } from "./SocketDebug";
 import { cn } from "@/lib/utils";
 import { useMediasoupContext } from "@/contexts/MediasoupContext";
 
@@ -46,6 +47,9 @@ const MeetingRoom = () => {
 
   return (
     <section className="relative h-screen w-full bg-[#0F1115] text-white overflow-hidden">
+      {/* Debug component - remove in production */}
+      <SocketDebug />
+
       <div
         className={cn(
           "h-full w-full flex overflow-hidden relative transition-all duration-300",
