@@ -16,18 +16,31 @@ import { useMediasoupContext } from "@/contexts/MediasoupContext";
 
 const CustomCallControls = () => {
   const router = useRouter();
-  const { isAudioMuted, isVideoEnabled, toggleAudio, toggleVideo } =
-    useMediasoupContext();
+  const {
+    isAudioMuted,
+    isVideoEnabled,
+    toggleAudio,
+    toggleVideo,
+    enableScreenShare,
+    disableScreenShare,
+    isScreenSharing,
+  } = useMediasoupContext();
 
   // Additional States
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
 
   // ✅ Admin Check (Could be enhanced later)
   const isAdmin = true;
 
   // Handlers
-  const toggleScreenShare = () => setIsScreenSharing(!isScreenSharing);
+  const toggleScreenShare = async () => {
+    if (isScreenSharing) {
+      disableScreenShare();
+    } else {
+      await enableScreenShare();
+    }
+  };
+
   const toggleRecording = () => setIsRecording(!isRecording);
 
   const handleLeave = () => {

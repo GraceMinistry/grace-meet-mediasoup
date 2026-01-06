@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Users } from "lucide-react";
+import { useUser } from "@clerk/nextjs";
+import { Users, Settings } from "lucide-react";
 
 import ChatSidebar from "./ChatSidebar";
 import ChatButton from "./ChatButton";
 import GridLayout from "./GridLayout";
 import CustomControls from "./CustomControls";
+import CustomHostControls from "./CustomHostControls";
 import { cn } from "@/lib/utils";
 import { useMediasoupContext } from "@/contexts/MediasoupContext";
 
@@ -15,6 +17,7 @@ const MeetingRoom = () => {
   const params = useParams();
   const router = useRouter();
   const roomId = (params?.id as string) || "default-room";
+  const { user } = useUser();
 
   // ✅ Get real-time data from Mediasoup Context
   const {
@@ -29,13 +32,15 @@ const MeetingRoom = () => {
   const [showParticipants, setShowParticipants] = useState(false);
   const [showChat, setShowChat] = useState(false);
 
-  // ✅ Join the Mediasoup room on mount
+  // ✅ Join the Mediasoup room on mount with user info
   useEffect(() => {
-    if (socket && !isInitialized) {
-      console.log("🚀 Joining Mediasoup Room:", roomId);
-      joinRoom(roomId);
+    if (socket && !isInitialized && user) {
+      const userName = user.fullName || user.firstName || "Anonymous";
+      const userImageUrl = user.imageUrl;
+      console.log("🚀 Joining Mediasoup Room:", roomId, "as", userName);
+      joinRoom(roomId, userName, userImageUrl);
     }
-  }, [socket, isInitialized, roomId, joinRoom]);
+  }, [socket, isInitialized, roomId, joinRoom, user]);
 
   return (
     <section className="relative h-screen w-full bg-[#0F1115] text-white overflow-hidden">
@@ -84,16 +89,36 @@ const MeetingRoom = () => {
               </button>
             </div>
 
-            {/* ✅ 4. Map through real Mediasoup participants */}
+            {/* ✅ Map through real Mediasoup participants */}
             <div className="flex flex-col gap-4">
               {participants.map((p) => (
-                <div key={p.id} className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs">
-                    {p.name.charAt(0).toUpperCase()}
+                <div
+                  key={p.id}
+                  className="flex items-center gap-3 justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    {p.imageUrl ? (
+                      <img
+                        src={p.imageUrl}
+                        alt={p.name}
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-semibold">
+                        {p.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">
+                        {p.name} {p.id === socket?.id ? "(You)" : ""}
+                      </span>
+                      {p.isHost && (
+                        <span className="text-xs text-yellow-400 flex items-center gap-1">
+                          👑 Host
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-sm font-medium">
-                    {p.name} {p.id === socket?.id ? "(You)" : ""}
-                  </span>
                 </div>
               ))}
             </div>

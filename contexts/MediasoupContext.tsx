@@ -8,8 +8,10 @@ import { Device, types } from "mediasoup-client";
 interface Participant {
   id: string;
   name: string;
+  imageUrl?: string;
   isAudioMuted: boolean;
   isVideoPaused: boolean;
+  isHost: boolean;
 }
 
 type MediasoupContextType = {
@@ -27,7 +29,18 @@ type MediasoupContextType = {
   disableVideo: () => void;
   toggleVideo: () => Promise<void>;
   isVideoEnabled: boolean;
-  joinRoom: (roomId: string) => Promise<void>;
+  enableScreenShare: () => Promise<void>;
+  disableScreenShare: () => void;
+  isScreenSharing: boolean;
+  isHost: boolean;
+  makeHost: (participantId: string) => void;
+  removeHost: (participantId: string) => void;
+  joinRoom: (
+    roomId: string,
+    userName?: string,
+    userImageUrl?: string,
+    isCreator?: boolean
+  ) => Promise<void>;
 };
 
 const MediasoupContext = createContext<MediasoupContextType | null>(null);
@@ -52,15 +65,17 @@ export const MediasoupProvider = ({
   // Media States
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(false);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isHost, setIsHost] = useState(false);
 
   // Refs for Transports and Producers
   const sendTransportRef = useRef<types.Transport | null>(null);
   const recvTransportRef = useRef<types.Transport | null>(null);
   const audioProducerRef = useRef<types.Producer | null>(null);
   const videoProducerRef = useRef<types.Producer | null>(null);
+  const screenProducerRef = useRef<types.Producer | null>(null);
   const currentRoomIdRef = useRef<string | null>(null);
 
-  // Initialize Socket Connection
   useEffect(() => {
     const socketInstance = io(
       process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8080",
@@ -83,6 +98,15 @@ export const MediasoupProvider = ({
       "participant-list-update",
       (updatedList: Participant[]) => {
         console.log("👥 Participants updated:", updatedList);
+        console.log("📝 Participant details:");
+        updatedList.forEach((p) => {
+          console.log(
+            `  - ID: ${p.id}, Name: ${p.name}, Image: ${
+              p.imageUrl || "none"
+            }, Host: ${p.isHost}`
+          );
+        });
+
         setParticipants(updatedList);
       }
     );
@@ -103,11 +127,23 @@ export const MediasoupProvider = ({
   }, []);
 
   // Join Room and Initialize Mediasoup
-  const joinRoom = async (roomId: string) => {
+  const joinRoom = async (
+    roomId: string,
+    userName?: string,
+    userImageUrl?: string,
+    isCreator: boolean = false
+  ) => {
     if (!socket || isInitialized) return;
 
     currentRoomIdRef.current = roomId;
-    console.log("🚪 Joining room:", roomId);
+    setIsHost(isCreator);
+    console.log(
+      "🚪 Joining room:",
+      roomId,
+      "as",
+      userName,
+      isCreator ? "(Host)" : ""
+    );
 
     try {
       // Step 1: Get Router RTP Capabilities
@@ -128,11 +164,23 @@ export const MediasoupProvider = ({
       console.log("📱 Device loaded");
 
       // Step 3: Join Mediasoup Room
+      console.log("📤 Sending join request with:", {
+        roomId,
+        userName,
+        userImageUrl: userImageUrl ? "provided" : "missing",
+        isCreator,
+      });
       const { existingProducers } = await new Promise<any>(
         (resolve, reject) => {
           socket.emit(
             "join-mediasoup-room",
-            { roomId, rtpCapabilities: newDevice.rtpCapabilities },
+            {
+              roomId,
+              rtpCapabilities: newDevice.rtpCapabilities,
+              userName,
+              userImageUrl,
+              isCreator,
+            },
             (response: any) => {
               if (response.error) {
                 reject(response.error);
@@ -425,6 +473,78 @@ export const MediasoupProvider = ({
     }
   };
 
+  // Screen Share Controls
+  const enableScreenShare = async () => {
+    if (!sendTransportRef.current || screenProducerRef.current) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          displaySurface: "monitor",
+        },
+        audio: false,
+      });
+      const screenTrack = stream.getVideoTracks()[0];
+
+      // Handle user clicking "Stop sharing" in browser UI
+      screenTrack.onended = () => {
+        disableScreenShare();
+      };
+
+      const producer = await sendTransportRef.current.produce({
+        track: screenTrack,
+        appData: { share: true }, // Mark as screen share
+      });
+      screenProducerRef.current = producer;
+
+      setIsScreenSharing(true);
+      console.log("🖥️ Screen share producer created");
+    } catch (error) {
+      console.error("❌ Failed to enable screen share:", error);
+    }
+  };
+
+  const disableScreenShare = () => {
+    if (screenProducerRef.current) {
+      const track = screenProducerRef.current.track;
+      track?.stop();
+      screenProducerRef.current.close();
+      screenProducerRef.current = null;
+
+      setIsScreenSharing(false);
+      console.log("🖥️ Screen share disabled");
+    }
+  };
+
+  // Host Management
+  const makeHost = (participantId: string) => {
+    if (!socket || !isHost) {
+      console.warn(
+        "⚠️ Cannot make host: not authorized or socket not connected"
+      );
+      return;
+    }
+    console.log("👑 Making participant host:", participantId);
+    socket.emit("make-host", {
+      roomId: currentRoomIdRef.current,
+      participantId,
+    });
+  };
+
+  const removeHost = (participantId: string) => {
+    if (!socket || !isHost) {
+      console.warn(
+        "⚠️ Cannot remove host: not authorized or socket not connected"
+      );
+      return;
+    }
+    console.log("👤 Removing host status:", participantId);
+    socket.emit("remove-host", {
+      roomId: currentRoomIdRef.current,
+      participantId,
+    });
+  };
+
   return (
     <MediasoupContext.Provider
       value={{
@@ -442,6 +562,12 @@ export const MediasoupProvider = ({
         disableVideo,
         toggleVideo,
         isVideoEnabled,
+        enableScreenShare,
+        disableScreenShare,
+        isScreenSharing,
+        isHost,
+        makeHost,
+        removeHost,
         joinRoom,
       }}
     >

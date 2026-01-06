@@ -18,26 +18,36 @@ import {
   Mic,
   Search,
   X,
+  Crown,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useMediasoupContext } from "@/contexts/MediasoupContext";
 
 // ✅ Replaced Stream's OwnCapability with a simple Enum/Type
 type MediaPermission = "audio" | "video" | "screenshare";
 
 interface CustomHostControlsProps {
   onClose?: () => void;
-  // PHASE 6: We will pass these down from useMediasoup
-  participants?: any[]; 
-  isLocalAdmin?: boolean;
 }
 
-const CustomHostControls = ({ onClose, participants = [], isLocalAdmin = true }: CustomHostControlsProps) => {
+const CustomHostControls = ({ onClose }: CustomHostControlsProps) => {
   const [search, setSearch] = useState("");
+  const { participants, isHost: isLocalHost, makeHost, removeHost, socket } = useMediasoupContext();
 
-  // In Mediasoup, "Admin" status is usually a flag on the participant object
-  if (!isLocalAdmin) return null;
+  // ✅ Only show if user is host
+  if (!isLocalHost) return null;
 
-  const isHostOrCoHost = (p: any) => p.role === "admin" || p.role === "host";
+  // ✅ Handle promoting to host
+  const handleMakeHost = (participantId: string, participantName: string) => {
+    makeHost(participantId);
+    toast.success(`Made ${participantName} a host`);
+  };
+
+  // ✅ Handle removing host status
+  const handleRemoveHost = (participantId: string, participantName: string) => {
+    removeHost(participantId);
+    toast.success(`Removed host status from ${participantName}`);
+  };
 
   // ✅ ACTION: Mute/Disable for Everyone
   const updateAll = async (type: MediaPermission, grant: boolean) => {
@@ -102,30 +112,60 @@ const CustomHostControls = ({ onClose, participants = [], isLocalAdmin = true }:
 
       <div className="space-y-2">
         {filtered.map((p) => (
-          <div key={p.sessionId} className="flex items-center justify-between px-3 py-2 bg-[#1B1D25] rounded-lg">
+          <div key={p.id} className="flex items-center justify-between px-3 py-2 bg-[#1B1D25] rounded-lg">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs">
-                {p.name?.charAt(0) || "U"}
-              </div>
+              {p.imageUrl ? (
+                <img
+                  src={p.imageUrl}
+                  alt={p.name}
+                  className="w-8 h-8 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs">
+                  {p.name?.charAt(0).toUpperCase() || "U"}
+                </div>
+              )}
               <div className="flex flex-col min-w-0">
                 <span className="text-sm truncate">{p.name || "User"}</span>
-                <span className="text-[10px] text-gray-500">{isHostOrCoHost(p) ? "Host" : "Guest"}</span>
+                <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                  {p.isHost && <span className="text-yellow-400">👑</span>}
+                  {p.isHost ? "Host" : "Guest"}
+                  {p.id === socket?.id && " (You)"}
+                </span>
               </div>
             </div>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger className="p-1 hover:bg-[#2A2C36] rounded">
-                <MoreVertical className="w-4 h-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="bg-[#1F212A] text-white border border-[#2C2E38]">
-                <DropdownMenuItem onClick={() => togglePermission(p.sessionId, "audio", true)}>
-                   <MicOff className="w-4 h-4 mr-2" /> Mute Participant
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-red-400">
-                   <Shield className="w-4 h-4 mr-2" /> Remove from Call
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* Don't show dropdown for yourself */}
+            {p.id !== socket?.id && (
+              <DropdownMenu>
+                <DropdownMenuTrigger className="p-1 hover:bg-[#2A2C36] rounded">
+                  <MoreVertical className="w-4 h-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="bg-[#1F212A] text-white border border-[#2C2E38]">
+                  {p.isHost ? (
+                    <DropdownMenuItem 
+                      onClick={() => handleRemoveHost(p.id, p.name)}
+                      className="cursor-pointer hover:bg-orange-500/20"
+                    >
+                      <Crown className="w-4 h-4 mr-2" /> Remove Host Status
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem 
+                      onClick={() => handleMakeHost(p.id, p.name)}
+                      className="cursor-pointer hover:bg-blue-500/20"
+                    >
+                      <Crown className="w-4 h-4 mr-2" /> Make Host
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => togglePermission(p.id, "audio", true)} className="cursor-pointer hover:bg-red-500/20">
+                     <MicOff className="w-4 h-4 mr-2" /> Mute Participant
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="text-red-400 cursor-pointer hover:bg-red-500/20">
+                     <Shield className="w-4 h-4 mr-2" /> Remove from Call
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         ))}
       </div>

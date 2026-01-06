@@ -1,12 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-// 🗑️ REMOVED: useCallStateHooks import
-
-// 🔊 mediasoup
-import { getSocket } from "@/lib/socket";
-import { useMediasoup } from "@/lib/useMediasoup";
-import { useMediasoupContext } from "@/contexts/MediasoupContext";
 
 const notifyUser = () => {
   if ("Notification" in window && Notification.permission === "granted") {
@@ -21,12 +15,12 @@ const notifyUser = () => {
   }
 };
 
-const MeetingRoomWrapper = ({ 
+const MeetingRoomWrapper = ({
   children,
-  roomId // ✅ CHANGED: Now takes roomId instead of call object
-}: { 
+  roomId,
+}: {
   children: React.ReactNode;
-  roomId: string; // ✅ CHANGED
+  roomId: string;
 }) => {
   const wakeLockRef = useRef<any>(null);
   const miniRef = useRef<HTMLDivElement>(null);
@@ -34,14 +28,6 @@ const MeetingRoomWrapper = ({
   const [showOverlay, setShowOverlay] = useState(false);
   const [drag, setDrag] = useState({ x: 20, y: 80 });
   const [isDragging, setIsDragging] = useState(false);
-
-  // 🗑️ REMOVED: dominantSpeaker (We will re-implement this with mediasoup in Phase 7)
-  const dominantSpeaker = null; 
-
-  // 🔊 mediasoup (socket + init)
-  const socket = getSocket();
-  const { initMediasoup, muteAudio, unmuteAudio, isAudioMuted, enableVideo, disableVideo, toggleVideo, isVideoEnabled } = useMediasoup(socket);
-  const mediasoupContext = useMediasoupContext();
 
   const requestWakeLock = async () => {
     try {
@@ -68,18 +54,24 @@ const MeetingRoomWrapper = ({
       navigator.mediaSession.playbackState = "playing";
 
       navigator.mediaSession.setActionHandler("play", () => {
-        const audio = document.getElementById("background-audio-trick") as HTMLAudioElement;
+        const audio = document.getElementById(
+          "background-audio-trick"
+        ) as HTMLAudioElement;
         audio?.play().catch(() => {});
         navigator.mediaSession.playbackState = "playing";
       });
       navigator.mediaSession.setActionHandler("pause", () => {
-        const audio = document.getElementById("background-audio-trick") as HTMLAudioElement;
+        const audio = document.getElementById(
+          "background-audio-trick"
+        ) as HTMLAudioElement;
         audio?.pause();
         navigator.mediaSession.playbackState = "paused";
       });
     }
 
-    let audio = document.getElementById("background-audio-trick") as HTMLAudioElement;
+    let audio = document.getElementById(
+      "background-audio-trick"
+    ) as HTMLAudioElement;
     if (!audio) {
       audio = document.createElement("audio");
       audio.id = "background-audio-trick";
@@ -90,7 +82,10 @@ const MeetingRoomWrapper = ({
     }
 
     audio.play().catch((error) => {
-      console.warn("Autoplay blocked, background audio may be restricted.", error);
+      console.warn(
+        "Autoplay blocked, background audio may be restricted.",
+        error
+      );
     });
   };
 
@@ -120,47 +115,6 @@ const MeetingRoomWrapper = ({
     };
   }, []);
 
-  // 🔊 mediasoup Phase 1 & 3 – room join / leave with socket connection
-useEffect(() => {
-  if (!call) return;
-
-  const roomId = call.id;
-
-  // Connect socket if not already connected
-  if (!socket.connected) {
-    socket.connect();
-  }
-
-  // Wait for socket to be connected before initializing mediasoup
-  const handleSocketConnect = () => {
-    initMediasoup(roomId)
-      .then(() => {
-        // Register controls after mediasoup is initialized
-        mediasoupContext.registerMediasoupControls({
-          muteAudio,
-          unmuteAudio,
-          isAudioMuted,
-          enableVideo,
-          disableVideo,
-          toggleVideo,
-          isVideoEnabled,
-        });
-      })
-      .catch(console.error);
-  };
-
-  if (socket.connected) {
-    handleSocketConnect();
-  } else {
-    socket.once("connect", handleSocketConnect);
-  }
-
-  return () => {
-    socket.off("connect", handleSocketConnect);
-  };
-}, [call?.id]);
-
-
   const onDragStart = () => setIsDragging(true);
   const onDragEnd = () => setIsDragging(false);
 
@@ -189,7 +143,6 @@ useEffect(() => {
           className={`
             fixed z-[99999] cursor-pointer rounded-full 
             shadow-lg overflow-hidden transition-all duration-300
-            ${dominantSpeaker ? "ring-4 ring-red-2" : ""}
           `}
           style={{
             width: 65,

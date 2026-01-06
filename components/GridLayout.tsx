@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useUser } from "@clerk/nextjs";
 import { PictureInPicture2 } from "lucide-react";
 import MediasoupTile from "./MediasoupTile";
 import { useMediasoupContext } from "@/contexts/MediasoupContext";
@@ -8,6 +9,8 @@ import { useMediasoupContext } from "@/contexts/MediasoupContext";
 interface Participant {
   id: string;
   name: string;
+  imageUrl?: string;
+  isHost?: boolean;
 }
 
 interface GridLayoutProps {
@@ -21,8 +24,9 @@ const GridLayout = ({
   remoteStreams,
   localStream,
 }: GridLayoutProps) => {
-  // ✅ Extract socket from context
+  // ✅ Extract socket and user info from context
   const { socket } = useMediasoupContext();
+  const { user } = useUser();
 
   const [screenWidth, setScreenWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1024
@@ -47,7 +51,8 @@ const GridLayout = ({
         {/* 1. LOCAL PREVIEW (YOU) */}
         <MediasoupTile
           stream={localStream || undefined}
-          participantName="You"
+          participantName={user?.fullName || user?.firstName || "You"}
+          participantImage={user?.imageUrl}
           isLocal
         />
 
@@ -63,6 +68,8 @@ const GridLayout = ({
                 key={participant.id}
                 stream={stream}
                 participantName={participant.name}
+                participantImage={participant.imageUrl}
+                isHost={participant.isHost}
               />
             );
           })}
