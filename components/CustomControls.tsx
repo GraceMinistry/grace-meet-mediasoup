@@ -30,6 +30,8 @@ const CustomCallControls = () => {
     enableScreenShare,
     disableScreenShare,
     isScreenSharing,
+    forceMuted,
+    forceVideoPaused,
   } = useMediasoupContext();
 
   // Additional States
@@ -84,13 +86,16 @@ const CustomCallControls = () => {
       {/* AUDIO BUTTON */}
       <button
         onClick={toggleAudio}
+        disabled={forceMuted}
         className={cn(
           "p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl transition-all duration-200 touch-manipulation active:scale-95",
           isAudioMuted
             ? "bg-red-500 text-white"
-            : "bg-dark-3 text-gray-300 hover:bg-dark-4"
+            : "bg-dark-3 text-gray-300 hover:bg-dark-4",
+          forceMuted && "opacity-50 cursor-not-allowed"
         )}
         aria-label={isAudioMuted ? "Unmute microphone" : "Mute microphone"}
+        title={forceMuted ? "Muted by host" : ""}
       >
         {isAudioMuted ? (
           <MicOff className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -102,13 +107,16 @@ const CustomCallControls = () => {
       {/* VIDEO BUTTON */}
       <button
         onClick={toggleVideo}
+        disabled={forceVideoPaused}
         className={cn(
           "p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl transition-all duration-200 touch-manipulation active:scale-95",
           !isVideoEnabled
             ? "bg-red-500 text-white"
-            : "bg-dark-3 text-gray-300 hover:bg-dark-4"
+            : "bg-dark-3 text-gray-300 hover:bg-dark-4",
+          forceVideoPaused && "opacity-50 cursor-not-allowed"
         )}
         aria-label={!isVideoEnabled ? "Turn on camera" : "Turn off camera"}
+        title={forceVideoPaused ? "Disabled by host" : ""}
       >
         {!isVideoEnabled ? (
           <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" />
