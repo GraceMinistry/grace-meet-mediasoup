@@ -4,6 +4,7 @@ import { createContext, useContext, useRef, useState, useEffect } from "react";
 import type { Socket } from "socket.io-client";
 import { getSocket } from "@/lib/socket";
 import { Device, types } from "mediasoup-client";
+import { toast } from "sonner";
 
 interface Participant {
   id: string;
@@ -22,8 +23,8 @@ type MediasoupContextType = {
   localStream: MediaStream | null;
   isInitialized: boolean;
   muteAudio: () => void;
-  unmuteAudio: () => void;
-  toggleAudio: () => void;
+  unmuteAudio: () => Promise<void>;
+  toggleAudio: () => Promise<void>;
   isAudioMuted: boolean;
   enableVideo: () => Promise<void>;
   disableVideo: () => void;
@@ -33,6 +34,8 @@ type MediasoupContextType = {
   disableScreenShare: () => void;
   isScreenSharing: boolean;
   isHost: boolean;
+  forceMuted: boolean;
+  forceVideoPaused: boolean;
   makeHost: (participantId: string) => void;
   removeHost: (participantId: string) => void;
   joinRoom: (
@@ -68,6 +71,8 @@ export const MediasoupProvider = ({
   const [isVideoEnabled, setIsVideoEnabled] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isHost, setIsHost] = useState(false);
+  const [forceMuted, setForceMuted] = useState(false);
+  const [forceVideoPaused, setForceVideoPaused] = useState(false);
 
   // Refs for Transports and Producers
   const sendTransportRef = useRef<types.Transport | null>(null);
@@ -76,6 +81,7 @@ export const MediasoupProvider = ({
   const videoProducerRef = useRef<types.Producer | null>(null);
   const screenProducerRef = useRef<types.Producer | null>(null);
   const currentRoomIdRef = useRef<string | null>(null);
+  const currentUserIdRef = useRef<string | null>(null);
   const hasJoinedRef = useRef<boolean>(false);
   const peerIdToUserIdRef = useRef<Map<string, string>>(new Map());
 
@@ -217,20 +223,81 @@ export const MediasoupProvider = ({
       }
     );
 
-    socketInstance.on("participant-left", ({ peerId }: { peerId: string }) => {
-      console.log("👋 Participant left:", peerId);
-      setParticipants((prev) => prev.filter((p) => p.id !== peerId));
-      setRemoteStreams((prev) => {
-        const newMap = new Map(prev);
-        newMap.delete(peerId);
-        return newMap;
-      });
-    });
+    socketInstance.on(
+      "participant-left",
+      ({ peerId, userId }: { peerId?: string; userId?: string }) => {
+        const participantId = userId || peerId;
+        console.log(`👋 Participant left: ${participantId}`, {
+          peerId,
+          userId,
+        });
+
+        if (!participantId) {
+          console.warn("⚠️ participant-left received without valid ID");
+          return;
+        }
+
+        // Remove from participants list
+        setParticipants((prev) => prev.filter((p) => p.id !== participantId));
+
+        // Clean up video/audio streams for this peer
+        setRemoteStreams((prev) => {
+          const newMap = new Map(prev);
+          newMap.delete(participantId);
+          // Also try deleting by socket ID if we have the mapping
+          const socketId = Array.from(peerIdToUserIdRef.current.entries()).find(
+            ([_, uid]) => uid === participantId
+          )?.[0];
+          if (socketId) {
+            newMap.delete(socketId);
+            peerIdToUserIdRef.current.delete(socketId);
+          }
+          return newMap;
+        });
+      }
+    );
+
+    // ✅ Listen for participant state changes
+    socketInstance.on(
+      "participant-state-changed",
+      ({
+        userId,
+        isAudioMuted,
+        isVideoPaused,
+      }: {
+        userId: string;
+        isAudioMuted?: boolean;
+        isVideoPaused?: boolean;
+      }) => {
+        console.log("🔄 Participant state changed:", {
+          userId,
+          isAudioMuted,
+          isVideoPaused,
+        });
+        setParticipants((prev) =>
+          prev.map((p) =>
+            p.id === userId
+              ? {
+                  ...p,
+                  ...(isAudioMuted !== undefined && { isAudioMuted }),
+                  ...(isVideoPaused !== undefined && { isVideoPaused }),
+                }
+              : p
+          )
+        );
+      }
+    );
 
     // ✅ Force control events from host
     socketInstance.on(
       "force-mute",
       ({ audio, by }: { audio: boolean; by: string }) => {
+        console.log(`====================================`);
+        console.log(`🎤 FORCE-MUTE EVENT RECEIVED`);
+        console.log(`   audio=${audio}, by=${by}`);
+        console.log(`   This should ONLY affect MICROPHONE`);
+        console.log(`====================================`);
+
         if (audio) {
           // Mute audio
           if (audioProducerRef.current) {
@@ -239,6 +306,7 @@ export const MediasoupProvider = ({
             audioProducerRef.current.close();
             audioProducerRef.current = null;
             setIsAudioMuted(true);
+            setForceMuted(true); // Lock mic until admin unmutes
 
             setLocalStream((prev) => {
               if (!prev) return null;
@@ -246,22 +314,52 @@ export const MediasoupProvider = ({
               return newStream.getTracks().length > 0 ? newStream : null;
             });
           }
+
+          // Update local participant state
+          setParticipants((prev) =>
+            prev.map((p) =>
+              p.id === (socketInstance as any)?.auth?.userId
+                ? { ...p, isAudioMuted: true }
+                : p
+            )
+          );
+
           console.warn(`🔇 Your microphone was muted by ${by}`);
+          toast.info(`${by} muted you`);
+        } else {
+          // Unmute - unlock the button
+          setForceMuted(false);
+          console.log(`🔊 ${by} unlocked your microphone (audio=${audio})`);
+          toast.success(`${by} allowed you to unmute`);
         }
       }
     );
 
+    socketInstance.on("allow-unmute", ({ by }: { by: string }) => {
+      // Remove the mute restriction flag
+      setForceMuted(false);
+      console.log(`🔊 ${by} allowed you to unmute`);
+      toast.success(`${by} allowed you to unmute`);
+    });
+
     socketInstance.on(
       "force-video-pause",
       ({ video, by }: { video: boolean; by: string }) => {
+        console.log(`====================================`);
+        console.log(`📹 FORCE-VIDEO-PAUSE EVENT RECEIVED`);
+        console.log(`   video=${video}, by=${by}`);
+        console.log(`   This should ONLY affect CAMERA`);
+        console.log(`====================================`);
+
         if (video) {
-          // Pause video
+          // Disable/Pause video
           if (videoProducerRef.current) {
             const track = videoProducerRef.current.track;
             track?.stop();
             videoProducerRef.current.close();
             videoProducerRef.current = null;
-            setIsVideoEnabled(false);
+            setIsVideoEnabled(false); // Video is OFF
+            setForceVideoPaused(true); // Lock camera until admin enables
 
             setLocalStream((prev) => {
               if (!prev) return null;
@@ -269,10 +367,40 @@ export const MediasoupProvider = ({
               return newStream.getTracks().length > 0 ? newStream : null;
             });
           }
+
+          // Update local participant state (video is OFF, so isVideoPaused = true)
+          setParticipants((prev) =>
+            prev.map((p) =>
+              p.id === (socketInstance as any)?.auth?.userId
+                ? { ...p, isVideoPaused: true } // true = paused = OFF
+                : p
+            )
+          );
+
           console.warn(`📹 Your camera was turned off by ${by}`);
+          toast.info(`${by} disabled your camera`);
+        } else {
+          // Enable video - unlock the button
+          setForceVideoPaused(false);
+          console.log(`📹 ${by} unlocked your camera (video=${video})`);
+          toast.success(`${by} allowed you to enable camera`);
         }
       }
     );
+
+    socketInstance.on("allow-video-enable", ({ by }: { by: string }) => {
+      // Remove the video restriction flag
+      setForceVideoPaused(false);
+      console.log(`📹 ${by} allowed you to enable camera`);
+      toast.success(`${by} allowed you to enable camera`);
+    });
+
+    socketInstance.on("allow-unpause", ({ by }: { by: string }) => {
+      // Remove the video restriction flag (alternative event name)
+      setForceVideoPaused(false);
+      console.log(`📹 ${by} allowed you to unpause video`);
+      toast.success(`${by} allowed you to unpause video`);
+    });
 
     socketInstance.on(
       "kicked-from-room",
@@ -310,8 +438,12 @@ export const MediasoupProvider = ({
       socketInstance.off("disconnect", handleDisconnect);
       socketInstance.off("participant-list-update");
       socketInstance.off("participant-left");
+      socketInstance.off("participant-state-changed");
       socketInstance.off("force-mute");
+      socketInstance.off("allow-unmute");
       socketInstance.off("force-video-pause");
+      socketInstance.off("allow-video-enable");
+      socketInstance.off("allow-unpause");
       socketInstance.off("kicked-from-room");
       socketInstance.off("new-producer");
     };
@@ -338,6 +470,7 @@ export const MediasoupProvider = ({
 
     hasJoinedRef.current = true;
     currentRoomIdRef.current = roomId;
+    currentUserIdRef.current = userId;
     setIsHost(isCreator);
 
     // Map socket to Clerk user ID for persistent identification
@@ -721,20 +854,80 @@ export const MediasoupProvider = ({
       audioProducerRef.current.pause();
       setIsAudioMuted(true);
       console.log("🔇 Audio muted");
+
+      // Update local participant state
+      setParticipants((prev) =>
+        prev.map((p) =>
+          p.id === (socket as any)?.auth?.userId
+            ? { ...p, isAudioMuted: true }
+            : p
+        )
+      );
+
+      // Notify server of state change
+      if (socket && currentRoomIdRef.current && currentUserIdRef.current) {
+        socket.emit("update-my-state", {
+          roomId: currentRoomIdRef.current,
+          userId: currentUserIdRef.current,
+          isAudioMuted: true,
+        });
+      }
     }
   };
 
-  const unmuteAudio = () => {
+  const unmuteAudio = async () => {
+    // If producer exists and is paused, just resume it
     if (audioProducerRef.current && audioProducerRef.current.paused) {
       audioProducerRef.current.resume();
       setIsAudioMuted(false);
       console.log("🔊 Audio unmuted");
+
+      // Update local participant state
+      setParticipants((prev) =>
+        prev.map((p) =>
+          p.id === (socket as any)?.auth?.userId
+            ? { ...p, isAudioMuted: false }
+            : p
+        )
+      );
+
+      // Notify server of state change
+      if (socket && currentRoomIdRef.current && currentUserIdRef.current) {
+        socket.emit("update-my-state", {
+          roomId: currentRoomIdRef.current,
+          userId: currentUserIdRef.current,
+          isAudioMuted: false,
+        });
+      }
+    }
+    // If producer doesn't exist (was closed by admin), restart it
+    else if (!audioProducerRef.current) {
+      await startAudio();
+      setIsAudioMuted(false);
+
+      // Update local participant state
+      setParticipants((prev) =>
+        prev.map((p) =>
+          p.id === (socket as any)?.auth?.userId
+            ? { ...p, isAudioMuted: false }
+            : p
+        )
+      );
+
+      // Notify server of state change
+      if (socket && currentRoomIdRef.current && currentUserIdRef.current) {
+        socket.emit("update-my-state", {
+          roomId: currentRoomIdRef.current,
+          userId: currentUserIdRef.current,
+          isAudioMuted: false,
+        });
+      }
     }
   };
 
-  const toggleAudio = () => {
+  const toggleAudio = async () => {
     if (isAudioMuted) {
-      unmuteAudio();
+      await unmuteAudio();
     } else {
       muteAudio();
     }
@@ -742,6 +935,11 @@ export const MediasoupProvider = ({
 
   // Video Controls
   const enableVideo = async () => {
+    console.log(
+      `📹 enableVideo called. Transport: ${
+        sendTransportRef.current ? "exists" : "null"
+      }, Producer: ${videoProducerRef.current ? "exists" : "null"}`
+    );
     if (!sendTransportRef.current || videoProducerRef.current) return;
 
     try {
@@ -767,14 +965,37 @@ export const MediasoupProvider = ({
         return newStream;
       });
 
-      setIsVideoEnabled(true);
+      setIsVideoEnabled(true); // Video is ON
       console.log("📹 Video producer created");
+
+      // Update local participant state (isVideoPaused should be false when video is enabled)
+      setParticipants((prev) =>
+        prev.map((p) =>
+          p.id === (socket as any)?.auth?.userId
+            ? { ...p, isVideoPaused: false } // false = not paused = ON
+            : p
+        )
+      );
+
+      // Notify server of state change
+      if (socket && currentRoomIdRef.current && currentUserIdRef.current) {
+        socket.emit("update-my-state", {
+          roomId: currentRoomIdRef.current,
+          userId: currentUserIdRef.current,
+          isVideoPaused: false,
+        });
+      }
     } catch (error) {
       console.error("❌ Failed to enable video:", error);
     }
   };
 
   const disableVideo = () => {
+    console.log(
+      `📹 disableVideo called. Producer: ${
+        videoProducerRef.current ? "exists" : "null"
+      }`
+    );
     if (videoProducerRef.current) {
       const track = videoProducerRef.current.track;
       track?.stop();
@@ -788,15 +1009,43 @@ export const MediasoupProvider = ({
         return newStream.getTracks().length > 0 ? newStream : null;
       });
 
-      setIsVideoEnabled(false);
-      console.log("📹 Video disabled");
+      setIsVideoEnabled(false); // Video is OFF
+      console.log("📹 Video disabled, isVideoEnabled set to FALSE");
+
+      // Update local participant state (isVideoPaused should be true when video is disabled)
+      setParticipants((prev) =>
+        prev.map((p) =>
+          p.id === (socket as any)?.auth?.userId
+            ? { ...p, isVideoPaused: true } // true = paused = OFF
+            : p
+        )
+      );
+
+      // Notify server of state change
+      if (socket && currentRoomIdRef.current && currentUserIdRef.current) {
+        socket.emit("update-my-state", {
+          roomId: currentRoomIdRef.current,
+          userId: currentUserIdRef.current,
+          isVideoPaused: true,
+        });
+      }
     }
   };
 
   const toggleVideo = async () => {
+    console.log(
+      `📹 toggleVideo called. Current state: isVideoEnabled=${isVideoEnabled}, producer=${
+        videoProducerRef.current ? "exists" : "null"
+      }`
+    );
+    // If video is currently enabled (ON), disable it (turn OFF)
     if (isVideoEnabled) {
+      console.log("📹 Disabling video...");
       disableVideo();
-    } else {
+    }
+    // If video is disabled (OFF), enable it (turn ON) - works even if producer was closed
+    else {
+      console.log("📹 Enabling video...");
       await enableVideo();
     }
   };
@@ -894,6 +1143,8 @@ export const MediasoupProvider = ({
         disableScreenShare,
         isScreenSharing,
         isHost,
+        forceMuted,
+        forceVideoPaused,
         makeHost,
         removeHost,
         joinRoom,

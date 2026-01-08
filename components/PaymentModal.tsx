@@ -39,6 +39,7 @@ export default function PaymentModal({
   );
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pollingCountRef = useRef<number>(0);
+  const hasShownSuccessRef = useRef<boolean>(false);
   const maxPollingAttempts = 12; // 12 attempts × 5 seconds = 60 seconds
 
   // Cleanup polling on unmount or when modal closes
@@ -49,6 +50,7 @@ export default function PaymentModal({
         pollingIntervalRef.current = null;
       }
       pollingCountRef.current = 0;
+      hasShownSuccessRef.current = false;
     }
   }, [isOpen]);
 
@@ -79,15 +81,102 @@ export default function PaymentModal({
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
         }
-        toast.success(
-          `Payment successful! Receipt: ${data.data.mpesaReceiptNumber}`
+
+        // Prevent showing multiple success messages
+        if (hasShownSuccessRef.current) {
+          return;
+        }
+        hasShownSuccessRef.current = true;
+
+        // Format amount with currency
+        const formattedAmount = new Intl.NumberFormat("en-KE", {
+          style: "currency",
+          currency: "KES",
+        }).format(data.data.amount);
+
+        // Handle empty id - use mpesaReceiptNumber as fallback
+        const transactionId =
+          data.data.id || data.data.mpesaReceiptNumber || "N/A";
+
+        console.log("✅ Payment successful:", {
+          transactionId,
+          receipt: data.data.mpesaReceiptNumber,
+          amount: data.data.amount,
+        });
+
+        // Beautiful church-appropriate thank you message with custom styling
+        toast.custom(
+          (t) => (
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-400 rounded-xl shadow-2xl p-6 max-w-md mx-auto relative animate-in slide-in-from-top-5">
+              {/* Close button */}
+              <button
+                onClick={() => toast.dismiss(t)}
+                className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Header with icon */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="bg-green-500 rounded-full p-3">
+                  <CheckCircle2 className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-green-800">
+                    Payment Successful!
+                  </h3>
+                  <p className="text-sm text-green-600">
+                    Transaction completed
+                  </p>
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="border-t border-green-200 my-4"></div>
+
+              {/* Thank you message */}
+              <div className="space-y-3">
+                <p className="text-lg text-gray-700 leading-relaxed">
+                  🙏 <span className="font-semibold">Thank you</span> for your
+                  generous giving of{" "}
+                  <span className="font-bold text-green-700">
+                    {formattedAmount}
+                  </span>
+                  !
+                </p>
+
+                <p className="text-base text-gray-600 italic">
+                  God bless you abundantly. Your support helps further the
+                  Kingdom.
+                </p>
+
+                {/* Receipt info */}
+                <div className="bg-white rounded-lg p-3 border border-green-200 mt-4">
+                  <p className="text-sm text-gray-500">M-Pesa Receipt</p>
+                  <p className="text-lg font-mono font-bold text-gray-800">
+                    {data.data.mpesaReceiptNumber}
+                  </p>
+                </div>
+
+                {/* Blessing */}
+                <p className="text-center text-sm text-green-600 font-medium mt-4">
+                  ✨ May the Lord bless you and keep you ✨
+                </p>
+              </div>
+            </div>
+          ),
+          {
+            duration: Infinity, // Won't auto-dismiss - user must click X
+            position: "top-center", // Prominent position
+          }
         );
+
         if (onSuccess) {
-          onSuccess(data.data.id);
+          onSuccess(transactionId);
         }
         setTimeout(() => {
           handleClose();
-        }, 1500);
+        }, 2000);
       } else if (data.status === "NOT_FOUND" || data.status === "FAILED") {
         // Transaction not found or failed - error
         setStatus("error");

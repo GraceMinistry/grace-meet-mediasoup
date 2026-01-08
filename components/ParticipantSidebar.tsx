@@ -12,12 +12,15 @@ import {
   UserX,
   X,
   Search,
+  MonitorOff,
+  Monitor,
 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useHostControls } from "@/hooks/useHostControls";
@@ -50,8 +53,17 @@ const ParticipantSidebar = ({
   const [search, setSearch] = useState("");
   const [showHostControls, setShowHostControls] = useState(false);
 
-  const { toggleRemoteAudio, toggleRemoteVideo, removeParticipant } =
-    useHostControls(socket, roomId);
+  const {
+    toggleRemoteAudio,
+    toggleRemoteVideo,
+    removeParticipant,
+    muteAllParticipants,
+    unmuteAllParticipants,
+    disableAllCameras,
+    enableAllCameras,
+    disableAllScreenSharing,
+    enableAllScreenSharing,
+  } = useHostControls(socket, roomId);
 
   // Find current user in participant list
   const currentUser = participants.find((p) => p.id === user?.id);
@@ -75,7 +87,7 @@ const ParticipantSidebar = ({
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-white">
-            Participants ({participants.length})
+            Participants [{participants.length}]
           </h2>
           <button
             onClick={onClose}
@@ -87,17 +99,91 @@ const ParticipantSidebar = ({
 
         {/* Host Controls Button */}
         {isHost && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={cn(
+                  "w-full mb-4 px-4 py-2 rounded-lg border transition flex items-center justify-center gap-2",
+                  "bg-[#1f212a] border-gray-700 text-gray-300 hover:bg-[#2a2c36]"
+                )}
+              >
+                <Crown size={16} />
+                Host Controls
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="bg-[#1f212a] text-white border border-gray-700 w-[280px]">
+              <div className="px-2 py-1.5 text-xs font-semibold text-gray-400">
+                GLOBAL CONTROLS
+              </div>
+
+              <DropdownMenuItem
+                onClick={muteAllParticipants}
+                className="hover:bg-[#2a2c36] cursor-pointer"
+              >
+                <MicOff className="w-4 h-4 mr-2 text-red-400" />
+                Disable All Participant Mics
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                onClick={unmuteAllParticipants}
+                className="hover:bg-[#2a2c36] cursor-pointer"
+              >
+                <Mic className="w-4 h-4 mr-2 text-green-400" />
+                Enable All Participant Mics
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator className="bg-gray-700" />
+
+              <DropdownMenuItem
+                onClick={disableAllCameras}
+                className="hover:bg-[#2a2c36] cursor-pointer"
+              >
+                <VideoOff className="w-4 h-4 mr-2 text-red-400" />
+                Disable All Participant Cameras
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                onClick={enableAllCameras}
+                className="hover:bg-[#2a2c36] cursor-pointer"
+              >
+                <Video className="w-4 h-4 mr-2 text-green-400" />
+                Enable All Participant Cameras
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator className="bg-gray-700" />
+
+              <DropdownMenuItem
+                onClick={disableAllScreenSharing}
+                className="hover:bg-[#2a2c36] cursor-pointer"
+              >
+                <MonitorOff className="w-4 h-4 mr-2 text-red-400" />
+                Disable Participant Screen Sharing
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                onClick={enableAllScreenSharing}
+                className="hover:bg-[#2a2c36] cursor-pointer"
+              >
+                <Monitor className="w-4 h-4 mr-2 text-green-400" />
+                Enable Participant Screen Sharing
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
+        {/* Individual Controls Toggle */}
+        {isHost && (
           <button
             onClick={() => setShowHostControls(!showHostControls)}
             className={cn(
-              "w-full mb-4 px-4 py-2 rounded-lg border transition flex items-center justify-center gap-2",
+              "w-full mb-4 px-4 py-2 rounded-lg border transition flex items-center justify-center gap-2 text-sm",
               showHostControls
                 ? "bg-blue-600 border-blue-400 text-white"
                 : "bg-[#1f212a] border-gray-700 text-gray-300 hover:bg-[#2a2c36]"
             )}
           >
-            <Crown size={16} />
-            Host Controls
+            <MoreVertical size={14} />
+            {showHostControls ? "Hide" : "Show"} Individual Controls
           </button>
         )}
 
