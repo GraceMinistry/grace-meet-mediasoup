@@ -106,13 +106,19 @@ const CustomHostControls = ({ onClose }: CustomHostControlsProps) => {
           </DropdownMenuTrigger>
           <DropdownMenuContent className="bg-[#1F212A] text-white border border-[#2C2E38] w-[240px]">
             <DropdownMenuItem
-              onClick={() => updateAll("audio", false)}
+              onSelect={(e) => {
+                e.preventDefault();
+                updateAll("audio", false);
+              }}
               className="hover:bg-red-500/20 cursor-pointer"
             >
               <MicOff className="w-4 h-4 mr-2" /> Disable All Mics
             </DropdownMenuItem>
             <DropdownMenuItem
-              onClick={() => updateAll("video", false)}
+              onSelect={(e) => {
+                e.preventDefault();
+                updateAll("video", false);
+              }}
               className="hover:bg-red-500/20 cursor-pointer"
             >
               <VideoOff className="w-4 h-4 mr-2" /> Disable All Cameras
@@ -168,21 +174,30 @@ const CustomHostControls = ({ onClose }: CustomHostControlsProps) => {
                 <DropdownMenuContent className="bg-[#1F212A] text-white border border-[#2C2E38]">
                   {p.isHost ? (
                     <DropdownMenuItem
-                      onClick={() => handleRemoveHost(p.id, p.name)}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        handleRemoveHost(p.id, p.name);
+                      }}
                       className="cursor-pointer hover:bg-orange-500/20"
                     >
                       <Crown className="w-4 h-4 mr-2" /> Remove Host Status
                     </DropdownMenuItem>
                   ) : (
                     <DropdownMenuItem
-                      onClick={() => handleMakeHost(p.id, p.name)}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        handleMakeHost(p.id, p.name);
+                      }}
                       className="cursor-pointer hover:bg-blue-500/20"
                     >
                       <Crown className="w-4 h-4 mr-2" /> Make Host
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem
-                    onClick={() => togglePermission(p.id, "audio", true)}
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      togglePermission(p.id, "audio", true);
+                    }}
                     className="cursor-pointer hover:bg-red-500/20"
                   >
                     <MicOff className="w-4 h-4 mr-2" /> Mute Participant

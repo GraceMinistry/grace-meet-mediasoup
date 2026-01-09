@@ -41,6 +41,7 @@ const CustomCallControls = () => {
   const [buttonRect, setButtonRect] = useState<DOMRect | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const portalMenuRef = useRef<HTMLDivElement>(null);
 
   // ✅ Admin Check (Could be enhanced later)
   const isAdmin = true;
@@ -66,18 +67,24 @@ const CustomCallControls = () => {
 
   // Close menu when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsMenuOpen(false);
-      }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+
+      // Click inside the 3-dot button
+      if (menuRef.current?.contains(target)) return;
+
+      // Click inside the portal menu
+      if (portalMenuRef.current?.contains(target)) return;
+
+      setIsMenuOpen(false);
     };
 
     if (isMenuOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("pointerdown", handlePointerDown);
     }
 
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("pointerdown", handlePointerDown);
     };
   }, [isMenuOpen]);
 
@@ -168,7 +175,9 @@ const CustomCallControls = () => {
       <div className="relative sm:hidden" ref={menuRef}>
         <button
           ref={buttonRef}
-          onClick={() => {
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
             if (!isMenuOpen && buttonRef.current) {
               setButtonRect(buttonRef.current.getBoundingClientRect());
             }
@@ -200,12 +209,14 @@ const CustomCallControls = () => {
             }}
           >
             <div
+              ref={portalMenuRef}
               className="relative bg-dark-2 border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden w-full max-w-xs sm:max-w-sm backdrop-blur-md animate-in slide-in-from-bottom-4 duration-200"
-              onClick={(e) => e.stopPropagation()}
             >
               {/* Screen Share Option */}
               <button
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   toggleScreenShare();
                   setIsMenuOpen(false);
                 }}
@@ -224,7 +235,9 @@ const CustomCallControls = () => {
 
               {/* Pay with M-Pesa Option */}
               <button
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   setShowPayment(true);
                   setIsMenuOpen(false);
                 }}
@@ -237,7 +250,11 @@ const CustomCallControls = () => {
               {/* Recording Option (Admin Only) */}
               {isAdmin && (
                 <button
-                  onClick={toggleRecording}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleRecording();
+                  }}
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-3.5 transition-all touch-manipulation active:bg-dark-4 border-t border-white/5",
                     isRecording
