@@ -14,7 +14,7 @@ interface PaymentModalProps {
   onError?: (error: string) => void;
 }
 
-type AccountType = "ROOM_PAYMENT" | "SUBSCRIPTION" | "CREDITS" | "DONATION";
+type AccountType = "OFFERING" | "TITHE" | "PARTNERSHIP" | "MISSIONS";
 type PaymentStatus =
   | "idle"
   | "loading"
@@ -32,7 +32,7 @@ export default function PaymentModal({
 }: PaymentModalProps) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [amount, setAmount] = useState("");
-  const [accountType, setAccountType] = useState<AccountType>("ROOM_PAYMENT");
+  const [accountType, setAccountType] = useState<AccountType>("OFFERING");
   const [status, setStatus] = useState<PaymentStatus>("idle");
   const [checkoutRequestId, setCheckoutRequestId] = useState<string | null>(
     null
@@ -301,7 +301,7 @@ export default function PaymentModal({
   const resetForm = () => {
     setPhoneNumber("");
     setAmount("");
-    setAccountType("ROOM_PAYMENT");
+    setAccountType("OFFERING");
     setStatus("idle");
     setCheckoutRequestId(null);
     pollingCountRef.current = 0;
@@ -395,10 +395,10 @@ export default function PaymentModal({
               className="w-full px-4 py-3 bg-dark-2 border border-gray-300 rounded-lg text-white focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none transition"
               disabled={status === "loading" || status === "checkingStatus"}
             >
-              <option value="ROOM_PAYMENT">Room Payment</option>
-              <option value="SUBSCRIPTION">Subscription</option>
-              <option value="CREDITS">Buy Credits</option>
-              <option value="DONATION">Donation</option>
+              <option value="OFFERING">Offering</option>
+              <option value="TITHE">Tithe</option>
+              <option value="PARTNERSHIP">Partnership</option>
+              <option value="MISSIONS">Missions</option>
             </select>
           </div>
 

@@ -117,7 +117,10 @@ const ParticipantSidebar = ({
               </div>
 
               <DropdownMenuItem
-                onClick={muteAllParticipants}
+                onSelect={(e) => {
+                  e.preventDefault();
+                  muteAllParticipants();
+                }}
                 className="hover:bg-[#2a2c36] cursor-pointer"
               >
                 <MicOff className="w-4 h-4 mr-2 text-red-400" />
@@ -125,7 +128,10 @@ const ParticipantSidebar = ({
               </DropdownMenuItem>
 
               <DropdownMenuItem
-                onClick={unmuteAllParticipants}
+                onSelect={(e) => {
+                  e.preventDefault();
+                  unmuteAllParticipants();
+                }}
                 className="hover:bg-[#2a2c36] cursor-pointer"
               >
                 <Mic className="w-4 h-4 mr-2 text-green-400" />
@@ -135,7 +141,10 @@ const ParticipantSidebar = ({
               <DropdownMenuSeparator className="bg-gray-700" />
 
               <DropdownMenuItem
-                onClick={disableAllCameras}
+                onSelect={(e) => {
+                  e.preventDefault();
+                  disableAllCameras();
+                }}
                 className="hover:bg-[#2a2c36] cursor-pointer"
               >
                 <VideoOff className="w-4 h-4 mr-2 text-red-400" />
@@ -143,7 +152,10 @@ const ParticipantSidebar = ({
               </DropdownMenuItem>
 
               <DropdownMenuItem
-                onClick={enableAllCameras}
+                onSelect={(e) => {
+                  e.preventDefault();
+                  enableAllCameras();
+                }}
                 className="hover:bg-[#2a2c36] cursor-pointer"
               >
                 <Video className="w-4 h-4 mr-2 text-green-400" />
@@ -153,7 +165,10 @@ const ParticipantSidebar = ({
               <DropdownMenuSeparator className="bg-gray-700" />
 
               <DropdownMenuItem
-                onClick={disableAllScreenSharing}
+                onSelect={(e) => {
+                  e.preventDefault();
+                  disableAllScreenSharing();
+                }}
                 className="hover:bg-[#2a2c36] cursor-pointer"
               >
                 <MonitorOff className="w-4 h-4 mr-2 text-red-400" />
@@ -161,7 +176,10 @@ const ParticipantSidebar = ({
               </DropdownMenuItem>
 
               <DropdownMenuItem
-                onClick={enableAllScreenSharing}
+                onSelect={(e) => {
+                  e.preventDefault();
+                  enableAllScreenSharing();
+                }}
                 className="hover:bg-[#2a2c36] cursor-pointer"
               >
                 <Monitor className="w-4 h-4 mr-2 text-green-400" />
@@ -273,12 +291,13 @@ const ParticipantSidebar = ({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="bg-[#1f212a] text-white border border-gray-700 w-[200px]">
                       <DropdownMenuItem
-                        onClick={() =>
+                        onSelect={(e) => {
+                          e.preventDefault();
                           toggleRemoteAudio(
                             participant.id,
                             participant.isAudioMuted
-                          )
-                        }
+                          );
+                        }}
                         className="hover:bg-[#2a2c36] cursor-pointer"
                       >
                         {participant.isAudioMuted ? (
@@ -292,12 +311,13 @@ const ParticipantSidebar = ({
                       </DropdownMenuItem>
 
                       <DropdownMenuItem
-                        onClick={() =>
+                        onSelect={(e) => {
+                          e.preventDefault();
                           toggleRemoteVideo(
                             participant.id,
                             participant.isVideoPaused
-                          )
-                        }
+                          );
+                        }}
                         className="hover:bg-[#2a2c36] cursor-pointer"
                       >
                         {participant.isVideoPaused ? (
@@ -311,9 +331,10 @@ const ParticipantSidebar = ({
                       </DropdownMenuItem>
 
                       <DropdownMenuItem
-                        onClick={() =>
-                          removeParticipant(participant.id, participant.name)
-                        }
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          removeParticipant(participant.id, participant.name);
+                        }}
                         className="text-red-400 hover:bg-red-500/20 cursor-pointer"
                       >
                         <UserX className="w-4 h-4 mr-2" />
