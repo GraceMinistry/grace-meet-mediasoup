@@ -32,6 +32,7 @@ const CustomCallControls = () => {
     isScreenSharing,
     forceMuted,
     forceVideoPaused,
+    globalVideoDisabled,
   } = useMediasoupContext();
 
   // Additional States
@@ -114,21 +115,28 @@ const CustomCallControls = () => {
       {/* VIDEO BUTTON */}
       <button
         onClick={toggleVideo}
-        disabled={forceVideoPaused}
+        disabled={forceVideoPaused || globalVideoDisabled}
         className={cn(
           "p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl transition-all duration-200 touch-manipulation active:scale-95",
           !isVideoEnabled
             ? "bg-red-500 text-white"
             : "bg-dark-3 text-gray-300 hover:bg-dark-4",
-          forceVideoPaused && "opacity-50 cursor-not-allowed"
+          (forceVideoPaused || globalVideoDisabled) &&
+            "opacity-50 cursor-not-allowed"
         )}
-        aria-label={!isVideoEnabled ? "Turn on camera" : "Turn off camera"}
-        title={forceVideoPaused ? "Disabled by host" : ""}
+        aria-label={isVideoEnabled ? "Turn off camera" : "Turn on camera"}
+        title={
+          globalVideoDisabled
+            ? "All cameras disabled by host"
+            : forceVideoPaused
+            ? "Your camera disabled by host"
+            : ""
+        }
       >
-        {!isVideoEnabled ? (
-          <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" />
-        ) : (
+        {isVideoEnabled ? (
           <Video className="w-4 h-4 sm:w-5 sm:h-5" />
+        ) : (
+          <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" />
         )}
       </button>
 

@@ -36,6 +36,7 @@ type MediasoupContextType = {
   isHost: boolean;
   forceMuted: boolean;
   forceVideoPaused: boolean;
+  globalVideoDisabled: boolean;
   makeHost: (participantId: string) => void;
   removeHost: (participantId: string) => void;
   joinRoom: (
@@ -73,6 +74,7 @@ export const MediasoupProvider = ({
   const [isHost, setIsHost] = useState(false);
   const [forceMuted, setForceMuted] = useState(false);
   const [forceVideoPaused, setForceVideoPaused] = useState(false);
+  const [globalVideoDisabled, setGlobalVideoDisabled] = useState(false);
 
   // Refs for Transports and Producers
   const sendTransportRef = useRef<types.Transport | null>(null);
@@ -352,21 +354,14 @@ export const MediasoupProvider = ({
         console.log(`====================================`);
 
         if (video) {
-          // Disable/Pause video
-          if (videoProducerRef.current) {
-            const track = videoProducerRef.current.track;
-            track?.stop();
-            videoProducerRef.current.close();
-            videoProducerRef.current = null;
+          // Pause video producer (don't close it)
+          if (videoProducerRef.current && !videoProducerRef.current.paused) {
+            videoProducerRef.current.pause();
             setIsVideoEnabled(false); // Video is OFF
-            setForceVideoPaused(true); // Lock camera until admin enables
-
-            setLocalStream((prev) => {
-              if (!prev) return null;
-              const newStream = new MediaStream(prev.getAudioTracks());
-              return newStream.getTracks().length > 0 ? newStream : null;
-            });
+            console.log("📹 Video producer paused by host");
           }
+
+          setForceVideoPaused(true); // Lock camera until admin enables
 
           // Update local participant state (video is OFF, so isVideoPaused = true)
           setParticipants((prev) =>
@@ -400,6 +395,56 @@ export const MediasoupProvider = ({
       setForceVideoPaused(false);
       console.log(`📹 ${by} allowed you to unpause video`);
       toast.success(`${by} allowed you to unpause video`);
+    });
+
+    // Listen for disable-all-cameras event from admin
+    socketInstance.on("disable-all-cameras", ({ by }: { by: string }) => {
+      console.log(
+        `📹 DISABLE-ALL-CAMERAS received from ${by} for user ${
+          (socketInstance as any)?.auth?.userId
+        }`
+      );
+
+      // Always set global video disabled flag (applies to all users regardless of current state)
+      setGlobalVideoDisabled(true);
+
+      // Pause video producer if currently enabled (don't close it)
+      if (videoProducerRef.current && !videoProducerRef.current.paused) {
+        console.log(
+          `📹 Pausing video producer for user ${
+            (socketInstance as any)?.auth?.userId
+          }`
+        );
+        videoProducerRef.current.pause();
+        setIsVideoEnabled(false);
+
+        setParticipants((prev) =>
+          prev.map((p) =>
+            p.id === (socketInstance as any)?.auth?.userId
+              ? { ...p, isVideoPaused: true }
+              : p
+          )
+        );
+      } else {
+        console.log(
+          `📹 No active video producer to pause for user ${
+            (socketInstance as any)?.auth?.userId
+          }`
+        );
+      }
+
+      console.warn(`📹 All cameras disabled by ${by}`);
+      toast.info(`${by} disabled all cameras`);
+    });
+
+    // Listen for enable-all-cameras event from admin
+    socketInstance.on("enable-all-cameras", ({ by }: { by: string }) => {
+      console.log(`📹 ENABLE-ALL-CAMERAS received from ${by}`);
+
+      // Remove global video disabled flag (don't auto-enable, let user choose)
+      setGlobalVideoDisabled(false);
+      console.log(`📹 Cameras unlocked by ${by}`);
+      toast.success(`${by} allowed cameras to be enabled`);
     });
 
     socketInstance.on(
@@ -444,6 +489,8 @@ export const MediasoupProvider = ({
       socketInstance.off("force-video-pause");
       socketInstance.off("allow-video-enable");
       socketInstance.off("allow-unpause");
+      socketInstance.off("disable-all-cameras");
+      socketInstance.off("enable-all-cameras");
       socketInstance.off("kicked-from-room");
       socketInstance.off("new-producer");
     };
@@ -938,10 +985,57 @@ export const MediasoupProvider = ({
     console.log(
       `📹 enableVideo called. Transport: ${
         sendTransportRef.current ? "exists" : "null"
-      }, Producer: ${videoProducerRef.current ? "exists" : "null"}`
+      }, Producer: ${
+        videoProducerRef.current ? "exists" : "null"
+      }, Producer paused: ${
+        videoProducerRef.current ? videoProducerRef.current.paused : "N/A"
+      }, forceVideoPaused: ${forceVideoPaused}, globalVideoDisabled: ${globalVideoDisabled}`
     );
-    if (!sendTransportRef.current || videoProducerRef.current) return;
 
+    // Prevent enabling video if host has disabled it (individually or globally)
+    if (forceVideoPaused) {
+      console.warn("📹 Cannot enable video - disabled by host (individual)");
+      toast.warning("Camera is disabled by host");
+      return;
+    }
+
+    if (globalVideoDisabled) {
+      console.warn("📹 Cannot enable video - disabled by host (global)");
+      toast.warning("All cameras are disabled by host");
+      return;
+    }
+
+    if (!sendTransportRef.current) return;
+
+    // If producer already exists and is paused, just resume it
+    if (videoProducerRef.current) {
+      if (videoProducerRef.current.paused) {
+        videoProducerRef.current.resume();
+        setIsVideoEnabled(true);
+        console.log("📹 Video producer resumed");
+
+        // Update local participant state
+        setParticipants((prev) =>
+          prev.map((p) =>
+            p.id === (socket as any)?.auth?.userId
+              ? { ...p, isVideoPaused: false }
+              : p
+          )
+        );
+
+        // Notify server of state change
+        if (socket && currentRoomIdRef.current && currentUserIdRef.current) {
+          socket.emit("update-my-state", {
+            roomId: currentRoomIdRef.current,
+            userId: currentUserIdRef.current,
+            isVideoPaused: false,
+          });
+        }
+      }
+      return;
+    }
+
+    // Create new producer only if it doesn't exist
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -994,23 +1088,15 @@ export const MediasoupProvider = ({
     console.log(
       `📹 disableVideo called. Producer: ${
         videoProducerRef.current ? "exists" : "null"
+      }, paused: ${
+        videoProducerRef.current ? videoProducerRef.current.paused : "N/A"
       }`
     );
-    if (videoProducerRef.current) {
-      const track = videoProducerRef.current.track;
-      track?.stop();
-      videoProducerRef.current.close();
-      videoProducerRef.current = null;
-
-      // Update local stream
-      setLocalStream((prev) => {
-        if (!prev) return null;
-        const newStream = new MediaStream(prev.getAudioTracks());
-        return newStream.getTracks().length > 0 ? newStream : null;
-      });
-
+    if (videoProducerRef.current && !videoProducerRef.current.paused) {
+      // Pause producer instead of closing it
+      videoProducerRef.current.pause();
       setIsVideoEnabled(false); // Video is OFF
-      console.log("📹 Video disabled, isVideoEnabled set to FALSE");
+      console.log("📹 Video producer paused");
 
       // Update local participant state (isVideoPaused should be true when video is disabled)
       setParticipants((prev) =>
@@ -1036,16 +1122,24 @@ export const MediasoupProvider = ({
     console.log(
       `📹 toggleVideo called. Current state: isVideoEnabled=${isVideoEnabled}, producer=${
         videoProducerRef.current ? "exists" : "null"
+      }, paused=${
+        videoProducerRef.current ? videoProducerRef.current.paused : "N/A"
       }`
     );
-    // If video is currently enabled (ON), disable it (turn OFF)
-    if (isVideoEnabled) {
-      console.log("📹 Disabling video...");
-      disableVideo();
+
+    // If producer exists, check its paused state (source of truth)
+    if (videoProducerRef.current) {
+      if (videoProducerRef.current.paused) {
+        console.log("📹 Enabling video (resuming)...");
+        await enableVideo();
+      } else {
+        console.log("📹 Disabling video (pausing)...");
+        disableVideo();
+      }
     }
-    // If video is disabled (OFF), enable it (turn ON) - works even if producer was closed
+    // If video producer doesn't exist, create it
     else {
-      console.log("📹 Enabling video...");
+      console.log("📹 Enabling video (creating)...");
       await enableVideo();
     }
   };
@@ -1145,6 +1239,7 @@ export const MediasoupProvider = ({
         isHost,
         forceMuted,
         forceVideoPaused,
+        globalVideoDisabled,
         makeHost,
         removeHost,
         joinRoom,
