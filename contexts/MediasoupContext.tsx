@@ -366,7 +366,7 @@ export const MediasoupProvider = ({
         setParticipants((prev) =>
           prev.map((p) => (p.id === participantId ? { ...p, ...updates } : p))
         );
-        
+
         // If it's the current user being updated, update their own status
         if (participantId === currentUserIdRef.current) {
           if (updates.isHost !== undefined) {

@@ -56,7 +56,12 @@ const ParticipantSidebar = ({
   const [search, setSearch] = useState("");
   const [showHostControls, setShowHostControls] = useState(false);
 
-  const { makeCoHost, removeCoHost, isHost: contextIsHost, isCoHost: contextIsCoHost } = useMediasoupContext();
+  const {
+    makeCoHost,
+    removeCoHost,
+    isHost: contextIsHost,
+    isCoHost: contextIsCoHost,
+  } = useMediasoupContext();
 
   const {
     toggleRemoteAudio,
